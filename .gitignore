@@ -1,0 +1,33 @@
+# Images
+*.jpeg
+*.jpg
+*.png
+*.gif
+*.bmp
+*.webp
+
+# Uploads (runtime directory)
+uploads/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Env
+.env
+.venv/
+venv/
+
+# OS
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+
+# Claude
+.claude/

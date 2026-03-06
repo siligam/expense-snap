@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "bill-extractor"
+version = "0.1.0"
+description = "Extract expense summaries from receipt photos and mobile app trip screenshots"
+requires-python = ">=3.8"
+dependencies = [
+    "flask>=3.0",
+    "easyocr>=1.7",
+    "pillow>=10.0",
+]
+
+[project.scripts]
+bill-extractor = "bill_extractor.app:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+
+[tool.setuptools.package-data]
+bill_extractor = ["index.html"]

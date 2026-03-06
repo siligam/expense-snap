@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bill Extractor</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <style>
+    :root {
+      --accent: #4f46e5;
+      --accent-light: #eef2ff;
+      --success: #16a34a;
+      --card-border: #e5e7eb;
+    }
+
+    body {
+      background: #f8fafc;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+    }
+
+    /* ── Top bar ── */
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: #fff;
+      border-bottom: 1px solid var(--card-border);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 24px;
+    }
+    .topbar .brand {
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: var(--accent);
+      margin-right: auto;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    /* ── Drop zone ── */
+    #drop-zone {
+      border: 2px dashed #c7d2fe;
+      border-radius: 12px;
+      background: #fff;
+      padding: 60px 24px;
+      text-align: center;
+      color: #6b7280;
+      transition: background 0.2s, border-color 0.2s;
+      cursor: pointer;
+      margin: 28px 24px;
+    }
+    #drop-zone.drag-over {
+      background: var(--accent-light);
+      border-color: var(--accent);
+    }
+    #drop-zone .drop-icon { font-size: 3rem; color: #a5b4fc; }
+    #drop-zone p { margin: 12px 0 4px; font-size: 1.05rem; }
+    #drop-zone small { font-size: 0.82rem; color: #9ca3af; }
+
+    /* ── Global drag-over highlight ── */
+    body.drag-active #drop-zone {
+      background: var(--accent-light);
+      border-color: var(--accent);
+    }
+
+    /* ── Results area ── */
+    #results { padding: 0 24px 40px; }
+
+    /* ── Row card ── */
+    .bill-row {
+      background: #fff;
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      margin-bottom: 16px;
+      display: grid;
+      grid-template-columns: 200px 160px 1fr 180px;
+      overflow: hidden;
+      box-shadow: 0 1px 4px rgba(0,0,0,.05);
+      min-height: 180px;
+    }
+
+    /* ── Col 1: image ── */
+    .col-image {
+      padding: 14px;
+      border-right: 1px solid var(--card-border);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      background: #fafafa;
+    }
+    .col-image img {
+      max-width: 100%;
+      max-height: 180px;
+      object-fit: contain;
+      border-radius: 6px;
+      border: 1px solid #e5e7eb;
+    }
+    .col-image .filename {
+      font-size: 0.72rem;
+      color: #6b7280;
+      text-align: center;
+      word-break: break-all;
+    }
+
+    /* ── Col 2: type selector ── */
+    .col-type {
+      padding: 14px 12px;
+      border-right: 1px solid var(--card-border);
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .col-type .section-label {
+      font-size: 0.7rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      color: #9ca3af;
+      margin-bottom: 4px;
+    }
+    .col-type .detected-badge {
+      display: inline-block;
+      font-size: 0.68rem;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+    .badge-receipt      { background: #fef3c7; color: #92400e; }
+    .badge-trip         { background: #dbeafe; color: #1e40af; }
+    .badge-unknown      { background: #f3f4f6; color: #6b7280; }
+
+    .col-type .form-check { padding-left: 1.4em; }
+    .col-type .form-check-label { font-size: 0.83rem; cursor: pointer; }
+    .col-type .form-check-input { cursor: pointer; }
+
+    .btn-reanalyze {
+      margin-top: auto;
+      font-size: 0.78rem;
+      padding: 4px 10px;
+      border-radius: 6px;
+    }
+
+    /* ── Col 3: summary ── */
+    .col-summary {
+      padding: 14px 16px;
+      border-right: 1px solid var(--card-border);
+    }
+    .col-summary .section-label {
+      font-size: 0.7rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      color: #9ca3af;
+      margin-bottom: 10px;
+    }
+    .summary-fields { display: flex; flex-direction: column; gap: 4px; }
+    .summary-field {
+      display: grid;
+      grid-template-columns: 110px 1fr;
+      font-size: 0.82rem;
+      line-height: 1.4;
+    }
+    .summary-field .key {
+      color: #9ca3af;
+      font-weight: 500;
+    }
+    .summary-field .val {
+      color: #111827;
+      word-break: break-word;
+    }
+    .summary-field .val.null { color: #d1d5db; font-style: italic; }
+    .summary-field .val.amount {
+      font-size: 1rem;
+      font-weight: 700;
+      color: var(--success);
+    }
+
+    /* loading & error inside summary col */
+    .state-loading, .state-error {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      gap: 8px;
+      font-size: 0.85rem;
+      color: #6b7280;
+    }
+    .state-error { color: #dc2626; }
+
+    /* ── Col 4: action ── */
+    .col-action {
+      padding: 14px 12px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      text-align: center;
+    }
+    .amount-display {
+      font-size: 1.6rem;
+      font-weight: 800;
+      color: var(--success);
+      line-height: 1.1;
+    }
+    .amount-display .currency { font-size: 1rem; font-weight: 600; vertical-align: super; }
+    .amount-null { font-size: 0.85rem; color: #d1d5db; font-style: italic; }
+
+    .btn-verify {
+      font-size: 0.8rem;
+      padding: 6px 16px;
+      border-radius: 999px;
+      transition: all 0.2s;
+    }
+    .btn-verify.verified {
+      background: var(--success);
+      border-color: var(--success);
+      color: #fff;
+      pointer-events: none;
+    }
+
+    /* ── Responsive: collapse to single column on narrow screens ── */
+    @media (max-width: 900px) {
+      .bill-row { grid-template-columns: 1fr 1fr; }
+      .col-image { border-right: none; border-bottom: 1px solid var(--card-border); grid-column: 1/3; flex-direction: row; }
+      .col-type  { border-right: 1px solid var(--card-border); }
+      .col-summary { grid-column: 1/3; border-right: none; border-top: 1px solid var(--card-border); }
+      .col-action  { grid-column: 1/3; border-top: 1px solid var(--card-border); flex-direction: row; justify-content: space-between; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ─────────── Top bar ─────────── -->
+<div class="topbar">
+  <div class="brand">
+    <i class="bi bi-receipt"></i> Bill Extractor
+  </div>
+  <button class="btn btn-primary btn-sm" onclick="fileInput.click()">
+    <i class="bi bi-plus-lg me-1"></i>Add Image
+  </button>
+  <button class="btn btn-outline-danger btn-sm" id="btn-reset" onclick="resetAll()" style="display:none">
+    <i class="bi bi-arrow-counterclockwise me-1"></i>Reset
+  </button>
+  <input type="file" id="file-input" hidden multiple accept="image/*">
+</div>
+
+<!-- ─────────── Drop zone ─────────── -->
+<div id="drop-zone" onclick="fileInput.click()">
+  <div class="drop-icon"><i class="bi bi-cloud-arrow-up"></i></div>
+  <p>Drop images here, or click to browse</p>
+  <small>Supports receipts (photo/scan) and mobile app screenshots</small>
+</div>
+
+<!-- ─────────── Results ─────────── -->
+<div id="results"></div>
+
+<script>
+  const fileInput   = document.getElementById('file-input');
+  const dropZone    = document.getElementById('drop-zone');
+  const resultsEl   = document.getElementById('results');
+  const btnReset    = document.getElementById('btn-reset');
+
+  // ── File input ──────────────────────────────────────────────────────────
+  fileInput.addEventListener('change', e => handleFiles(e.target.files));
+
+  // ── Drag and drop (anywhere on page) ────────────────────────────────────
+  document.addEventListener('dragover', e => { e.preventDefault(); document.body.classList.add('drag-active'); });
+  document.addEventListener('dragleave', e => { if (!e.relatedTarget) document.body.classList.remove('drag-active'); });
+  document.addEventListener('drop', e => {
+    e.preventDefault();
+    document.body.classList.remove('drag-active');
+    handleFiles(e.dataTransfer.files);
+  });
+
+  // ── Handle selected files ────────────────────────────────────────────────
+  function handleFiles(files) {
+    for (const file of files) {
+      if (!file.type.startsWith('image/')) continue;
+      uploadAndRender(file);
+    }
+  }
+
+  // ── Upload + initial render ──────────────────────────────────────────────
+  async function uploadAndRender(file) {
+    dropZone.style.display = 'none';
+    btnReset.style.display = '';
+
+    const objectUrl = URL.createObjectURL(file);
+    const row = buildRow(null, file.name, objectUrl);
+    resultsEl.appendChild(row);
+    setLoading(row, true);
+
+    const fd = new FormData();
+    fd.append('image', file);
+    fd.append('image_type', 'auto');
+
+    try {
+      const res  = await fetch('/extract', { method: 'POST', body: fd });
+      const data = await res.json();
+      if (data.error) { setError(row, data.error); return; }
+      row.dataset.fileId = data.file_id;
+      populateRow(row, data.summary);
+    } catch (err) {
+      setError(row, err.message);
+    }
+  }
+
+  // ── Re-analyze with chosen type ──────────────────────────────────────────
+  async function reanalyze(row) {
+    const fileId    = row.dataset.fileId;
+    const imageType = row.querySelector('input[name="type_' + fileId + '"]:checked').value;
+
+    setLoading(row, true);
+    try {
+      const res  = await fetch('/re-extract', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ file_id: fileId, image_type: imageType }),
+      });
+      const data = await res.json();
+      if (data.error) { setError(row, data.error); return; }
+      populateRow(row, data.summary);
+    } catch (err) {
+      setError(row, err.message);
+    }
+  }
+
+  // ── Reset all ────────────────────────────────────────────────────────────
+  async function resetAll() {
+    await fetch('/reset', { method: 'POST' });
+    resultsEl.innerHTML = '';
+    dropZone.style.display = '';
+    btnReset.style.display = 'none';
+    fileInput.value = '';
+  }
+
+  // ── Build a row skeleton ──────────────────────────────────────────────────
+  function buildRow(fileId, filename, imageUrl) {
+    const safeName = fileId || '_tmp_' + Date.now();
+
+    const row = document.createElement('div');
+    row.className = 'bill-row';
+    if (fileId) row.dataset.fileId = fileId;
+
+    row.innerHTML = `
+      <!-- Col 1: image -->
+      <div class="col-image">
+        <img src="${imageUrl}" alt="${esc(filename)}">
+        <span class="filename">${esc(filename)}</span>
+      </div>
+
+      <!-- Col 2: type selector -->
+      <div class="col-type">
+        <div class="section-label">Image Type</div>
+        <span class="detected-badge badge-unknown" data-badge>Detecting…</span>
+        <div class="form-check">
+          <input class="form-check-input" type="radio" name="type_${safeName}" id="r_auto_${safeName}" value="auto" checked>
+          <label class="form-check-label" for="r_auto_${safeName}">Auto detect</label>
+        </div>
+        <div class="form-check">
+          <input class="form-check-input" type="radio" name="type_${safeName}" id="r_receipt_${safeName}" value="receipt">
+          <label class="form-check-label" for="r_receipt_${safeName}">Receipt</label>
+        </div>
+        <div class="form-check">
+          <input class="form-check-input" type="radio" name="type_${safeName}" id="r_trip_${safeName}" value="trip_screenshot">
+          <label class="form-check-label" for="r_trip_${safeName}">Trip screenshot</label>
+        </div>
+        <button class="btn btn-outline-secondary btn-sm btn-reanalyze" data-reanalyze>
+          <i class="bi bi-arrow-repeat me-1"></i>Re-analyse
+        </button>
+      </div>
+
+      <!-- Col 3: summary -->
+      <div class="col-summary" data-summary-col>
+        <div class="state-loading">
+          <div class="spinner-border spinner-border-sm text-secondary" role="status"></div>
+          <span>Analysing…</span>
+        </div>
+      </div>
+
+      <!-- Col 4: action -->
+      <div class="col-action" data-action-col>
+        <div class="amount-null">—</div>
+      </div>
+    `;
+
+    // Wire up re-analyse button (needs fileId, set after upload)
+    row.querySelector('[data-reanalyze]').addEventListener('click', () => reanalyze(row));
+
+    // After upload we rename the radio group to use the real fileId
+    row._imageUrl = imageUrl;
+    row._filename = filename;
+
+    return row;
+  }
+
+  // ── Populate a row with extracted summary ─────────────────────────────────
+  function populateRow(row, summary) {
+    const fileId   = row.dataset.fileId;
+    const type     = summary.type;
+
+    // Rename radio group to real fileId
+    row.querySelectorAll('[name^="type_"]').forEach(el => {
+      el.name = 'type_' + fileId;
+      el.id   = el.id.replace(/type_[^_]+_/, 'r_').replace('_'+el.value+'_', '_'+el.value+'_').split('_').slice(0,2).join('_') + '_' + fileId;
+    });
+    row.querySelectorAll('label[for]').forEach((lbl, i) => {
+      const inputs = row.querySelectorAll('input[type=radio]');
+      if (inputs[i]) lbl.setAttribute('for', inputs[i].id);
+    });
+
+    // Detected-type badge
+    const badge = row.querySelector('[data-badge]');
+    if (type === 'receipt') {
+      badge.textContent = 'Receipt';
+      badge.className = 'detected-badge badge-receipt';
+    } else if (type === 'trip_screenshot') {
+      badge.textContent = 'Trip screenshot';
+      badge.className = 'detected-badge badge-trip';
+    } else {
+      badge.textContent = 'Unknown';
+      badge.className = 'detected-badge badge-unknown';
+    }
+
+    // Summary fields
+    const summaryCol = row.querySelector('[data-summary-col]');
+    summaryCol.innerHTML = `
+      <div class="section-label">Extracted Fields</div>
+      <div class="summary-fields">${buildSummaryFields(summary)}</div>
+    `;
+
+    // Action column
+    const amount = summary.grand_total;
+    const actionCol = row.querySelector('[data-action-col]');
+    actionCol.innerHTML = `
+      <div>
+        ${amount != null
+          ? `<div class="amount-display"><span class="currency">₹</span>${amount.toFixed(2)}</div>`
+          : `<div class="amount-null">No amount<br>detected</div>`}
+      </div>
+      <button class="btn btn-outline-success btn-sm btn-verify" onclick="markVerified(this)">
+        <i class="bi bi-check-lg me-1"></i>Mark verified
+      </button>
+    `;
+  }
+
+  // ── Build summary key-value HTML ──────────────────────────────────────────
+  function buildSummaryFields(s) {
+    const rows = [];
+
+    const field = (key, val) => {
+      const isAmount = key === 'Grand Total';
+      const display  = val != null && val !== '' ? esc(String(val)) : null;
+      const cls      = display == null ? 'null' : (isAmount ? 'amount' : '');
+      const text     = display != null
+        ? (isAmount ? '₹' + parseFloat(val).toFixed(2) : display)
+        : '—';
+      rows.push(`
+        <div class="summary-field">
+          <span class="key">${key}</span>
+          <span class="val ${cls}">${text}</span>
+        </div>`);
+    };
+
+    if (s.type === 'receipt') {
+      field('Vendor',      s.vendor);
+      field('Date',        s.date);
+      field('Bill No.',    s.bill_no);
+      field('Grand Total', s.grand_total);
+    } else if (s.type === 'trip_screenshot') {
+      field('Service',     s.service_type);
+      field('Driver',      s.driver);
+      field('Date',        s.date);
+      field('Pickup',      s.pickup);
+      field('Dropoff',     s.dropoff);
+      field('Grand Total', s.grand_total);
+    } else {
+      rows.push(`<div class="summary-field"><span class="val null">Could not determine image type.</span></div>`);
+    }
+
+    return rows.join('');
+  }
+
+  // ── Loading / error states ────────────────────────────────────────────────
+  function setLoading(row, on) {
+    const col = row.querySelector('[data-summary-col]');
+    if (on) {
+      col.innerHTML = `
+        <div class="state-loading">
+          <div class="spinner-border spinner-border-sm text-secondary" role="status"></div>
+          <span>Analysing…</span>
+        </div>`;
+      row.querySelector('[data-action-col]').innerHTML = `<div class="amount-null">—</div>`;
+      row.querySelector('[data-badge]').textContent = 'Detecting…';
+      row.querySelector('[data-badge]').className = 'detected-badge badge-unknown';
+    }
+  }
+
+  function setError(row, msg) {
+    const col = row.querySelector('[data-summary-col]');
+    col.innerHTML = `
+      <div class="state-error">
+        <i class="bi bi-exclamation-triangle-fill fs-4"></i>
+        <span>${esc(msg)}</span>
+      </div>`;
+    row.querySelector('[data-action-col]').innerHTML = '';
+    row.querySelector('[data-badge]').textContent = 'Error';
+    row.querySelector('[data-badge]').className = 'detected-badge badge-unknown';
+  }
+
+  // ── Mark verified ─────────────────────────────────────────────────────────
+  function markVerified(btn) {
+    btn.classList.add('verified');
+    btn.innerHTML = '<i class="bi bi-check-circle-fill me-1"></i>Verified';
+  }
+
+  // ── Escape HTML ───────────────────────────────────────────────────────────
+  function esc(str) {
+    return String(str)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+</script>
+</body>
+</html>
