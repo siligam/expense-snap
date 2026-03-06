@@ -93,13 +93,35 @@
       gap: 8px;
       background: #fafafa;
     }
-    .col-image img {
+    .col-image .img-wrap {
+      position: relative;
+      display: inline-flex;
+      cursor: zoom-in;
+    }
+    .col-image .img-wrap img {
       max-width: 100%;
       max-height: 180px;
       object-fit: contain;
       border-radius: 6px;
       border: 1px solid #e5e7eb;
+      transition: opacity 0.15s;
+      display: block;
     }
+    .col-image .img-wrap:hover img { opacity: 0.82; }
+    .col-image .img-wrap .zoom-hint {
+      position: absolute;
+      bottom: 5px;
+      right: 5px;
+      background: rgba(0,0,0,0.45);
+      color: #fff;
+      border-radius: 4px;
+      padding: 2px 5px;
+      font-size: 0.72rem;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.15s;
+    }
+    .col-image .img-wrap:hover .zoom-hint { opacity: 1; }
     .col-image .filename {
       font-size: 0.72rem;
       color: #6b7280;
@@ -131,9 +153,9 @@
       font-weight: 600;
       margin-bottom: 8px;
     }
-    .badge-receipt      { background: #fef3c7; color: #92400e; }
-    .badge-trip         { background: #dbeafe; color: #1e40af; }
-    .badge-unknown      { background: #f3f4f6; color: #6b7280; }
+    .badge-receipt  { background: #fef3c7; color: #92400e; }
+    .badge-trip     { background: #dbeafe; color: #1e40af; }
+    .badge-unknown  { background: #f3f4f6; color: #6b7280; }
 
     .col-type .form-check { padding-left: 1.4em; }
     .col-type .form-check-label { font-size: 0.83rem; cursor: pointer; }
@@ -151,14 +173,38 @@
       padding: 14px 16px;
       border-right: 1px solid var(--card-border);
     }
+    .summary-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
     .col-summary .section-label {
       font-size: 0.7rem;
       font-weight: 600;
       text-transform: uppercase;
       letter-spacing: .06em;
       color: #9ca3af;
-      margin-bottom: 10px;
+      margin-bottom: 0;
     }
+    /* Copy button */
+    .btn-copy {
+      border: none;
+      background: none;
+      color: #9ca3af;
+      cursor: pointer;
+      font-size: 0.78rem;
+      padding: 2px 5px;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      gap: 3px;
+      transition: color 0.15s, background 0.15s;
+      line-height: 1;
+    }
+    .btn-copy:hover { color: var(--accent); background: var(--accent-light); }
+    .btn-copy.copied { color: var(--success); background: #dcfce7; }
+
     .summary-fields { display: flex; flex-direction: column; gap: 4px; }
     .summary-field {
       display: grid;
@@ -166,14 +212,8 @@
       font-size: 0.82rem;
       line-height: 1.4;
     }
-    .summary-field .key {
-      color: #9ca3af;
-      font-weight: 500;
-    }
-    .summary-field .val {
-      color: #111827;
-      word-break: break-word;
-    }
+    .summary-field .key { color: #9ca3af; font-weight: 500; }
+    .summary-field .val { color: #111827; word-break: break-word; }
     .summary-field .val.null { color: #d1d5db; font-style: italic; }
     .summary-field .val.amount {
       font-size: 1rem;
@@ -226,7 +266,46 @@
       pointer-events: none;
     }
 
-    /* ── Responsive: collapse to single column on narrow screens ── */
+    /* ── Lightbox ── */
+    #lightbox {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 1000;
+      background: rgba(0, 0, 0, 0.88);
+      align-items: center;
+      justify-content: center;
+      cursor: zoom-out;
+    }
+    #lightbox.open { display: flex; }
+    #lightbox img {
+      max-width: 92vw;
+      max-height: 92vh;
+      object-fit: contain;
+      border-radius: 6px;
+      box-shadow: 0 12px 60px rgba(0,0,0,0.5);
+      cursor: default;
+    }
+    #lightbox-close {
+      position: absolute;
+      top: 16px;
+      right: 20px;
+      background: rgba(255,255,255,0.12);
+      border: none;
+      color: #fff;
+      font-size: 1.3rem;
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    #lightbox-close:hover { background: rgba(255,255,255,0.25); }
+
+    /* ── Responsive ── */
     @media (max-width: 900px) {
       .bill-row { grid-template-columns: 1fr 1fr; }
       .col-image { border-right: none; border-bottom: 1px solid var(--card-border); grid-column: 1/3; flex-direction: row; }
@@ -262,11 +341,21 @@
 <!-- ─────────── Results ─────────── -->
 <div id="results"></div>
 
+<!-- ─────────── Lightbox ─────────── -->
+<div id="lightbox" onclick="closeLightbox()">
+  <button id="lightbox-close" onclick="closeLightbox()" title="Close (Esc)">
+    <i class="bi bi-x-lg"></i>
+  </button>
+  <img id="lightbox-img" src="" alt="" onclick="event.stopPropagation()">
+</div>
+
 <script>
-  const fileInput   = document.getElementById('file-input');
-  const dropZone    = document.getElementById('drop-zone');
-  const resultsEl   = document.getElementById('results');
-  const btnReset    = document.getElementById('btn-reset');
+  const fileInput = document.getElementById('file-input');
+  const dropZone  = document.getElementById('drop-zone');
+  const resultsEl = document.getElementById('results');
+  const btnReset  = document.getElementById('btn-reset');
+  const lightbox  = document.getElementById('lightbox');
+  const lightboxImg = document.getElementById('lightbox-img');
 
   // ── File input ──────────────────────────────────────────────────────────
   fileInput.addEventListener('change', e => handleFiles(e.target.files));
@@ -279,6 +368,9 @@
     document.body.classList.remove('drag-active');
     handleFiles(e.dataTransfer.files);
   });
+
+  // ── Keyboard: Escape closes lightbox ────────────────────────────────────
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeLightbox(); });
 
   // ── Handle selected files ────────────────────────────────────────────────
   function handleFiles(files) {
@@ -342,6 +434,56 @@
     fileInput.value = '';
   }
 
+  // ── Lightbox ─────────────────────────────────────────────────────────────
+  function openLightbox(src) {
+    lightboxImg.src = src;
+    lightbox.classList.add('open');
+    document.body.style.overflow = 'hidden';
+  }
+
+  function closeLightbox() {
+    lightbox.classList.remove('open');
+    lightboxImg.src = '';
+    document.body.style.overflow = '';
+  }
+
+  // ── Copy fields as plain text ─────────────────────────────────────────────
+  function copyFields(btn) {
+    const row = btn.closest('.bill-row');
+    const s   = row._summary;
+    if (!s) return;
+
+    const lines = [];
+    const fmt = (key, val) => {
+      if (val == null || val === '') return;
+      const display = key === 'Grand Total' ? '₹' + parseFloat(val).toFixed(2) : String(val);
+      lines.push(`${key}: ${display}`);
+    };
+
+    if (s.type === 'receipt') {
+      fmt('Vendor',      s.vendor);
+      fmt('Date',        s.date);
+      fmt('Bill No.',    s.bill_no);
+      fmt('Grand Total', s.grand_total);
+    } else if (s.type === 'trip_screenshot') {
+      fmt('Service',     s.service_type);
+      fmt('Driver',      s.driver);
+      fmt('Date',        s.date);
+      fmt('Pickup',      s.pickup);
+      fmt('Dropoff',     s.dropoff);
+      fmt('Grand Total', s.grand_total);
+    }
+
+    navigator.clipboard.writeText(lines.join('\n')).then(() => {
+      btn.classList.add('copied');
+      btn.innerHTML = '<i class="bi bi-clipboard-check"></i> Copied!';
+      setTimeout(() => {
+        btn.classList.remove('copied');
+        btn.innerHTML = '<i class="bi bi-clipboard"></i>';
+      }, 2000);
+    });
+  }
+
   // ── Build a row skeleton ──────────────────────────────────────────────────
   function buildRow(fileId, filename, imageUrl) {
     const safeName = fileId || '_tmp_' + Date.now();
@@ -353,7 +495,10 @@
     row.innerHTML = `
       <!-- Col 1: image -->
       <div class="col-image">
-        <img src="${imageUrl}" alt="${esc(filename)}">
+        <div class="img-wrap">
+          <img src="${imageUrl}" alt="${esc(filename)}">
+          <span class="zoom-hint"><i class="bi bi-zoom-in"></i></span>
+        </div>
         <span class="filename">${esc(filename)}</span>
       </div>
 
@@ -392,10 +537,12 @@
       </div>
     `;
 
-    // Wire up re-analyse button (needs fileId, set after upload)
+    // Image click → lightbox
+    row.querySelector('.img-wrap').addEventListener('click', () => openLightbox(imageUrl));
+
+    // Re-analyse button
     row.querySelector('[data-reanalyze]').addEventListener('click', () => reanalyze(row));
 
-    // After upload we rename the radio group to use the real fileId
     row._imageUrl = imageUrl;
     row._filename = filename;
 
@@ -404,8 +551,11 @@
 
   // ── Populate a row with extracted summary ─────────────────────────────────
   function populateRow(row, summary) {
-    const fileId   = row.dataset.fileId;
-    const type     = summary.type;
+    const fileId = row.dataset.fileId;
+    const type   = summary.type;
+
+    // Store summary on the row for copy access
+    row._summary = summary;
 
     // Rename radio group to real fileId
     row.querySelectorAll('[name^="type_"]').forEach(el => {
@@ -430,10 +580,15 @@
       badge.className = 'detected-badge badge-unknown';
     }
 
-    // Summary fields
+    // Summary fields with copy button in header
     const summaryCol = row.querySelector('[data-summary-col]');
     summaryCol.innerHTML = `
-      <div class="section-label">Extracted Fields</div>
+      <div class="summary-header">
+        <span class="section-label">Extracted Fields</span>
+        <button class="btn-copy" title="Copy as plain text" onclick="copyFields(this)">
+          <i class="bi bi-clipboard"></i>
+        </button>
+      </div>
       <div class="summary-fields">${buildSummaryFields(summary)}</div>
     `;
 
@@ -491,22 +646,19 @@
 
   // ── Loading / error states ────────────────────────────────────────────────
   function setLoading(row, on) {
-    const col = row.querySelector('[data-summary-col]');
-    if (on) {
-      col.innerHTML = `
-        <div class="state-loading">
-          <div class="spinner-border spinner-border-sm text-secondary" role="status"></div>
-          <span>Analysing…</span>
-        </div>`;
-      row.querySelector('[data-action-col]').innerHTML = `<div class="amount-null">—</div>`;
-      row.querySelector('[data-badge]').textContent = 'Detecting…';
-      row.querySelector('[data-badge]').className = 'detected-badge badge-unknown';
-    }
+    if (!on) return;
+    row.querySelector('[data-summary-col]').innerHTML = `
+      <div class="state-loading">
+        <div class="spinner-border spinner-border-sm text-secondary" role="status"></div>
+        <span>Analysing…</span>
+      </div>`;
+    row.querySelector('[data-action-col]').innerHTML = `<div class="amount-null">—</div>`;
+    row.querySelector('[data-badge]').textContent = 'Detecting…';
+    row.querySelector('[data-badge]').className = 'detected-badge badge-unknown';
   }
 
   function setError(row, msg) {
-    const col = row.querySelector('[data-summary-col]');
-    col.innerHTML = `
+    row.querySelector('[data-summary-col]').innerHTML = `
       <div class="state-error">
         <i class="bi bi-exclamation-triangle-fill fs-4"></i>
         <span>${esc(msg)}</span>
