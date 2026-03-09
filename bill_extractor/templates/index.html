@@ -188,7 +188,7 @@
 
     .col-header {
       display: grid;
-      grid-template-columns: 150px minmax(150px,0.8fr) minmax(150px,0.8fr) 1fr 200px;
+      grid-template-columns: 150px minmax(150px,0.8fr) 1fr 200px;
       background: #f8fafc;
       border: 1px solid var(--border);
       border-radius: 8px 8px 0 0;
@@ -209,7 +209,7 @@
 
     .result-row {
       display: grid;
-      grid-template-columns: 150px minmax(150px,0.8fr) minmax(150px,0.8fr) 1fr 200px;
+      grid-template-columns: 150px minmax(150px,0.8fr) 1fr 200px;
       border-bottom: 1px solid var(--border);
       background: var(--card);
       transition: background 0.1s;
@@ -287,124 +287,54 @@
       font-size: 0.8rem; font-weight: 600; color: var(--navy);
     }
 
-    /* ── Plain text col ── */
-    .plain-wrap { position: relative; }
-    .plain-text {
-      font-family: var(--mono);
-      font-size: 0.72rem;
-      line-height: 1.7;
-      color: #334155;
-      white-space: pre;
-      background: #f8fafc;
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      padding: 8px 10px;
-      max-height: 160px;
-      overflow-y: auto;
-      word-break: break-word;
-      white-space: pre-wrap;
+    /* ── Plain text col (editable) ── */
+    .plain-ta {
+      width: 100%; min-height: 140px;
+      font-family: var(--mono); font-size: 0.72rem;
+      line-height: 1.7; color: #334155;
+      background: #f8fafc; border: 1px solid var(--border);
+      border-radius: 6px; padding: 8px 10px;
+      resize: vertical; transition: border-color 0.15s, background 0.15s;
     }
-    .btn-copy {
-      margin-top: 6px;
-      background: none;
-      border: 1px solid var(--border);
-      border-radius: 5px;
-      font-size: 0.68rem;
-      color: var(--muted);
-      padding: 2px 9px;
-      cursor: pointer;
-      font-family: var(--sans);
-      transition: all 0.15s;
+    .plain-ta:focus { outline: none; border-color: var(--blue); background: #fff; }
+    .plain-ta.edited { background: #fffbeb; border-color: var(--amber); }
+    .plain-actions { display: flex; gap: 5px; margin-top: 6px; flex-wrap: wrap; }
+    .btn-save-plain {
+      background: var(--blue); color: #fff; border: none;
+      border-radius: 5px; font-size: 0.68rem; font-weight: 600;
+      padding: 3px 10px; cursor: pointer; font-family: var(--sans);
       display: inline-flex; align-items: center; gap: 4px;
+      transition: background 0.15s;
+    }
+    .btn-save-plain:hover { background: #1d4ed8; }
+    .btn-save-plain.saved { background: var(--green); }
+    .btn-undo-plain {
+      background: none; border: 1px solid var(--border);
+      border-radius: 5px; font-size: 0.68rem; color: var(--muted);
+      padding: 3px 10px; cursor: pointer; font-family: var(--sans);
+      display: inline-flex; align-items: center; gap: 4px;
+      transition: all 0.15s;
+    }
+    .btn-undo-plain:hover { border-color: var(--amber); color: var(--amber); }
+    .btn-copy {
+      background: none; border: 1px solid var(--border);
+      border-radius: 5px; font-size: 0.68rem; color: var(--muted);
+      padding: 3px 9px; cursor: pointer; font-family: var(--sans);
+      transition: all 0.15s; display: inline-flex; align-items: center; gap: 4px;
     }
     .btn-copy:hover { background: var(--blue); color: #fff; border-color: var(--blue); }
     .btn-copy.copied { background: var(--green); color: #fff; border-color: var(--green); }
 
     /* ── Actions col ── */
     .action-col { display: flex; flex-direction: column; gap: 6px; }
-    .btn-good, .btn-bad {
-      border: none; border-radius: 6px;
-      font-size: 0.75rem; font-weight: 500;
-      padding: 5px 10px; cursor: pointer;
-      display: flex; align-items: center; gap: 5px;
-      transition: all 0.15s; font-family: var(--sans);
-      width: 100%;
-    }
-    .btn-good { background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; }
-    .btn-good:hover, .btn-good.on { background: var(--green); color: #fff; border-color: var(--green); }
-    .btn-bad  { background: #fff5f5; color: #991b1b; border: 1px solid #fecaca; }
-    .btn-bad:hover, .btn-bad.on { background: var(--red); color: #fff; border-color: var(--red); }
-
-    /* ── Status badge ── */
-    .status-badge {
+    .action-ts { font-size: 0.63rem; color: #94a3b8; font-family: var(--mono); }
+    .edited-badge {
       display: inline-flex; align-items: center; gap: 4px;
       font-size: 0.65rem; font-weight: 700;
-      padding: 2px 8px; border-radius: 20px; margin-top: 5px;
+      padding: 2px 8px; border-radius: 20px;
+      background: #fef3c7; color: #92400e;
       text-transform: uppercase; letter-spacing: 0.3px;
     }
-    .sbadge-good       { background: #dcfce7; color: #166534; }
-    .sbadge-bad        { background: #fee2e2; color: #991b1b; }
-    .sbadge-corrected  { background: #fef3c7; color: #92400e; }
-
-    /* ── Correction area ── */
-    .corr-wrap {
-      display: none; margin-top: 6px;
-    }
-    .corr-wrap.open { display: block; }
-    .corr-ta {
-      width: 100%; min-height: 140px;
-      font-family: var(--mono); font-size: 0.7rem;
-      border: 1px solid var(--border); border-radius: 5px;
-      padding: 6px 8px; resize: vertical;
-      background: #fffbeb; color: #1e293b;
-      line-height: 1.6;
-    }
-    .corr-ta:focus { outline: none; border-color: var(--amber); box-shadow: 0 0 0 2px rgba(217,119,6,0.15); }
-    .btn-save-corr {
-      margin-top: 4px;
-      background: var(--amber); color: #fff; border: none;
-      border-radius: 5px; font-size: 0.7rem; font-weight: 600;
-      padding: 4px 10px; cursor: pointer; font-family: var(--sans);
-      display: inline-flex; align-items: center; gap: 4px;
-      transition: background 0.15s;
-    }
-    .btn-save-corr:hover { background: #b45309; }
-
-    .ocr-box {
-      font-family: var(--mono);
-      font-size: 0.7rem;
-      line-height: 1.65;
-      color: #475569;
-      background: #f8fafc;
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      padding: 8px 10px;
-      max-height: 160px;
-      overflow-y: auto;
-      white-space: pre-wrap;
-      word-break: break-word;
-    }
-
-    .ocr-toggle {
-      background: none; border: 1px solid var(--border);
-      border-radius: 5px; font-size: 0.68rem; color: var(--muted);
-      padding: 3px 8px; cursor: pointer; font-family: var(--sans);
-      display: flex; align-items: center; gap: 4px;
-      transition: all 0.15s; width: 100%; margin-top: 2px;
-    }
-    .ocr-toggle:hover { border-color: var(--blue); color: var(--blue); }
-    .ocr-panel {
-      display: none; margin-top: 6px;
-      font-family: var(--mono); font-size: 0.65rem;
-      line-height: 1.6; color: var(--muted);
-      background: #f8fafc; border: 1px solid var(--border);
-      border-radius: 5px; padding: 6px 8px;
-      max-height: 100px; overflow-y: auto;
-      white-space: pre-wrap;
-    }
-    .ocr-panel.open { display: block; }
-
-    .action-ts { font-size: 0.63rem; color: #94a3b8; margin-top: auto; font-family: var(--mono); }
 
     /* ── Empty state ── */
     #emptyState {
@@ -586,6 +516,66 @@
     #toast.t-info    { background: var(--navy);  color: #fff; }
     #toast.t-success { background: var(--green); color: #fff; }
     #toast.t-error   { background: var(--red);   color: #fff; }
+
+    /* ── Summary table ── */
+    .summary-wrap {
+      margin-top: 1.25rem;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .summary-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 14px;
+      background: #f8fafc;
+      border-bottom: 1px solid var(--border);
+    }
+    .summary-title {
+      font-size: 0.78rem; font-weight: 700; color: var(--navy);
+      text-transform: uppercase; letter-spacing: 0.5px;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .summary-actions { display: flex; align-items: center; gap: 8px; }
+    .summary-sel-count { font-size: 0.72rem; color: var(--muted); }
+    .btn-export {
+      background: var(--blue); color: #fff; border: none;
+      border-radius: 6px; font-size: 0.78rem; font-weight: 600;
+      padding: 5px 14px; cursor: pointer; font-family: var(--sans);
+      display: inline-flex; align-items: center; gap: 6px;
+      transition: background 0.15s;
+    }
+    .btn-export:hover:not(:disabled) { background: #1d4ed8; }
+    .btn-export:disabled { opacity: 0.45; cursor: not-allowed; }
+    .summary-table {
+      width: 100%; border-collapse: collapse;
+      font-size: 0.8rem;
+    }
+    .summary-table thead th {
+      padding: 7px 12px; background: #f8fafc;
+      text-align: left; font-size: 0.68rem; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.5px;
+      color: var(--muted); border-bottom: 1px solid var(--border);
+    }
+    .summary-table tbody tr {
+      border-bottom: 1px solid var(--border);
+      transition: background 0.1s;
+    }
+    .summary-table tbody tr:last-child { border-bottom: none; }
+    .summary-table tbody tr:hover { background: #fafcff; }
+    .summary-table td {
+      padding: 7px 12px; vertical-align: middle;
+    }
+    .summary-table td.sum-filename {
+      font-family: var(--mono); font-size: 0.72rem; color: var(--navy);
+      word-break: break-all; max-width: 240px;
+    }
+    .summary-table td.sum-cat {
+      font-weight: 600; font-size: 0.75rem;
+    }
+    .summary-table td.sum-amount {
+      font-weight: 700; color: var(--green); text-align: right;
+    }
   </style>
 </head>
 <body>
@@ -630,10 +620,38 @@
       <div><i class="fa-regular fa-image me-1"></i> Image</div>
       <div><i class="fa-solid fa-table-list me-1"></i> Extracted Fields</div>
       <div><i class="fa-solid fa-align-left me-1"></i> Plain Text</div>
-      <div><i class="fa-solid fa-font me-1"></i> OCR Text</div>
       <div><i class="fa-solid fa-check-double me-1"></i> Actions</div>
     </div>
     <div class="result-rows" id="resultsBody"></div>
+  </div>
+
+  <!-- Summary table -->
+  <div class="summary-wrap" id="summaryWrap" style="display:none;">
+    <div class="summary-header">
+      <div class="summary-title">
+        <i class="fa-solid fa-table-list"></i> Summary
+      </div>
+      <div class="summary-actions">
+        <span class="summary-sel-count" id="summarySelCount"></span>
+        <button class="btn-export" id="btnExport" onclick="exportSelected()" disabled>
+          <i class="fa-solid fa-file-zipper"></i> Export Selected
+        </button>
+      </div>
+    </div>
+    <table class="summary-table">
+      <thead>
+        <tr>
+          <th style="width:36px;text-align:center;">
+            <input type="checkbox" id="selectAll" onchange="toggleSelectAll(this)" title="Select all">
+          </th>
+          <th>Filename</th>
+          <th>Date</th>
+          <th>Category</th>
+          <th style="text-align:right;">Amount</th>
+        </tr>
+      </thead>
+      <tbody id="summaryBody"></tbody>
+    </table>
   </div>
 
   <!-- Empty -->
@@ -790,6 +808,7 @@ function replaceSpinner(id, data) {
   const el = document.getElementById(id);
   if (!el) return;
   el.outerHTML = buildRow(id, data);
+  addSummaryRow(id, data);
 }
 
 function replaceSpinnerError(id, name, msg) {
@@ -805,6 +824,7 @@ function addRow(data) {
   showResultsArea();
   const id = `r${++rowIdx}`;
   document.getElementById('resultsBody').insertAdjacentHTML('beforeend', buildRow(id, data));
+  addSummaryRow(id, data);
   updateTabCount();
 }
 
@@ -815,49 +835,55 @@ function buildRow(id, data, opts = {}) {
   const src    = data.source || 'new';
   const result = data.result || {};
   const hash   = data.hash   || '';
-  const ocrTxt = (data.ocr_text || []).join('\n');
+  const plain  = data.correction || toPlainText(result);
 
-  // Col 1 — image + status badge
-  const initBadge = renderStatusBadge(data.action, !!data.correction);
+  // Col 1 — image
+  const genName  = data.filename_generated || '';
+  const origName = data.filename || '';
   const c1 = `
     <div class="rc">
       <img src="${esc(data.image_url)}" class="thumb-img"
-           alt="${esc(data.filename)}"
+           alt="${esc(origName)}"
            onclick="openLightbox('${esc(data.image_url)}')" />
-      <div class="thumb-name">${esc(data.filename)}</div>
+      <div class="thumb-name">${esc(genName || origName)}</div>
+      ${genName && genName !== origName
+        ? `<div class="thumb-name" style="color:#94a3b8;font-size:0.62rem;font-style:italic;">${esc(origName)}</div>`
+        : ''}
       <span class="src-badge ${SRC_CLASS[src] || 'src-new'}">${SRC_LABEL[src] || src}</span>
       <div class="thumb-date"><i class="fa-regular fa-clock"></i> ${fmtDate(data.timestamp)}</div>
-      <div id="${id}-status-badge">${initBadge}</div>
     </div>`;
 
   // Col 2 — rendered fields
   const c2 = `<div class="rc">${renderFields(result)}</div>`;
 
-  // Col 3 — plain text (use correction if stored)
-  const plain = data.correction || toPlainText(result);
+  // Col 3 — editable plain text
   const c3 = `
     <div class="rc">
-      <div class="plain-text" id="${id}-plain">${esc(plain)}</div>
-      <button class="btn-copy" id="${id}-copy" onclick="copyPlain('${id}')">
-        <i class="fa-regular fa-copy"></i> Copy
-      </button>
+      <textarea class="plain-ta" id="${id}-plain"
+                data-orig="${esc(plain)}"
+                oninput="onPlainInput('${id}')">${esc(plain)}</textarea>
+      <div class="plain-actions">
+        <button class="btn-save-plain" id="${id}-save" onclick="savePlainEdit('${id}','${esc(hash)}')">
+          <i class="fa-solid fa-floppy-disk"></i> Save
+        </button>
+        <button class="btn-undo-plain" onclick="undoPlainEdit('${id}')">
+          <i class="fa-solid fa-rotate-left"></i> Undo
+        </button>
+        <button class="btn-copy" id="${id}-copy" onclick="copyPlain('${id}')">
+          <i class="fa-regular fa-copy"></i> Copy
+        </button>
+      </div>
     </div>`;
 
-  // Col 4 — OCR text
-  const c4 = `
-    <div class="rc">
-      <div class="ocr-box">${esc(ocrTxt) || '<span style="color:#94a3b8">—</span>'}</div>
-    </div>`;
+  // Col 4 — actions
+  const editedBadge = data.correction
+    ? '<span class="edited-badge">✍ Edited</span>' : '';
 
-  // Col 5 — actions
-  const corrOpen  = data.action === 'bad' ? 'open' : '';
-  const corrText  = data.correction || toPlainText(result);
-  const goodOn    = data.action === 'good'  ? 'on' : '';
-  const badOn     = data.action === 'bad'   ? 'on' : '';
-
-  const c5 = opts.historyMode ? `
+  const c4 = opts.historyMode ? `
     <div class="rc">
       <div class="action-col">
+        ${editedBadge}
+        <div class="action-ts">${fmtDate(data.timestamp)}</div>
         <button class="btn-delete" onclick="deleteHistoryItem('${esc(hash)}', this)">
           <i class="fa-solid fa-trash"></i> Delete
         </button>
@@ -865,26 +891,16 @@ function buildRow(id, data, opts = {}) {
     </div>` : `
     <div class="rc">
       <div class="action-col">
-        <button class="btn-good ${goodOn}" id="${id}-good" onclick="setAction('${id}','${esc(hash)}','good')">
-          <i class="fa-solid fa-thumbs-up"></i> Good Result
-        </button>
-        <button class="btn-bad ${badOn}" id="${id}-bad" onclick="setAction('${id}','${esc(hash)}','bad')">
-          <i class="fa-solid fa-thumbs-down"></i> Bad Result
-        </button>
-        <div class="corr-wrap ${corrOpen}" id="${id}-corr-wrap">
-          <textarea class="corr-ta" id="${id}-corr-ta" placeholder="Enter correct values…">${esc(corrText)}</textarea>
-          <button class="btn-save-corr" onclick="saveCorrection('${id}','${esc(hash)}')">
-            <i class="fa-solid fa-floppy-disk"></i> Save
-          </button>
-        </div>
+        ${editedBadge}
+        <div class="action-ts" id="${id}-edited-wrap">${editedBadge ? '' : ''}</div>
         <div class="action-ts">${fmtDate(data.timestamp)}</div>
-        <button class="btn-delete" style="margin-top:6px" onclick="deleteSessionItem('${esc(hash)}', this)">
+        <button class="btn-delete" onclick="deleteSessionItem('${esc(hash)}', this)">
           <i class="fa-solid fa-trash"></i> Delete
         </button>
       </div>
     </div>`;
 
-  return `<div id="${id}" class="result-row">${c1}${c2}${c3}${c4}${c5}</div>`;
+  return `<div id="${id}" class="result-row">${c1}${c2}${c3}${c4}</div>`;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -922,77 +938,50 @@ function toPlainText(result) {
 }
 
 // ─────────────────────────────────────────────────────────────
-// Actions
+// Plain text editing
 // ─────────────────────────────────────────────────────────────
-function renderStatusBadge(action, hasCorrn) {
-  if (hasCorrn) return '<span class="status-badge sbadge-corrected">✍ Corrected</span>';
-  if (action === 'good') return '<span class="status-badge sbadge-good">✓ Good Result</span>';
-  if (action === 'bad')  return '<span class="status-badge sbadge-bad">✗ Bad Result</span>';
-  return '';
+function onPlainInput(id) {
+  const ta   = document.getElementById(`${id}-plain`);
+  const save = document.getElementById(`${id}-save`);
+  if (!ta || !save) return;
+  const changed = ta.value !== ta.dataset.orig;
+  ta.classList.toggle('edited', changed);
 }
 
-async function setAction(id, hash, action) {
-  // Toggle button states
-  const goodBtn = document.getElementById(`${id}-good`);
-  const badBtn  = document.getElementById(`${id}-bad`);
-  const corrWrap = document.getElementById(`${id}-corr-wrap`);
-  if (!goodBtn) return;
-
-  // If clicking the already-active button, deactivate
-  const isOn = goodBtn.classList.contains('on') && action === 'good'
-            || badBtn.classList.contains('on')  && action === 'bad';
-  const newAction = isOn ? null : action;
-
-  goodBtn.classList.toggle('on', newAction === 'good');
-  badBtn.classList.toggle('on',  newAction === 'bad');
-  corrWrap?.classList.toggle('open', newAction === 'bad');
-
-  // Update status badge
-  document.getElementById(`${id}-status-badge`).innerHTML = renderStatusBadge(newAction, false);
-
-  // Persist
-  if (hash) {
-    await fetch(`/api/item/${hash}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: newAction })
-    }).catch(() => {});
-  }
-}
-
-async function saveCorrection(id, hash) {
-  const ta = document.getElementById(`${id}-corr-ta`);
+async function savePlainEdit(id, hash) {
+  const ta   = document.getElementById(`${id}-plain`);
+  const save = document.getElementById(`${id}-save`);
   if (!ta) return;
-  const text = ta.value.trim();
-
-  // Update plain-text column live
-  const plainEl = document.getElementById(`${id}-plain`);
-  if (plainEl) plainEl.textContent = text;
-
-  // Update status badge → Corrected
-  const badgeEl = document.getElementById(`${id}-status-badge`);
-  if (badgeEl) badgeEl.innerHTML = renderStatusBadge(null, true);
-
-  // Ensure Bad Result button stays on
-  document.getElementById(`${id}-bad`)?.classList.add('on');
-
-  // Persist
+  const text = ta.value;
+  ta.dataset.orig = text;           // update baseline so Undo goes to saved value
+  ta.classList.remove('edited');
+  if (save) {
+    save.classList.add('saved');
+    save.innerHTML = '<i class="fa-solid fa-check"></i> Saved';
+    setTimeout(() => {
+      save.classList.remove('saved');
+      save.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Save';
+    }, 2000);
+  }
+  updateSummaryRow(id, text);
   if (hash) {
     await fetch(`/api/item/${hash}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'bad', correction: text })
+      body: JSON.stringify({ correction: text })
     }).catch(() => {});
   }
-  showToast('Correction saved', 'success');
 }
 
-function toggleOcr(id) {
-  document.getElementById(`${id}-ocr`)?.classList.toggle('open');
+function undoPlainEdit(id) {
+  const ta = document.getElementById(`${id}-plain`);
+  if (!ta) return;
+  ta.value = ta.dataset.orig;
+  ta.classList.remove('edited');
 }
 
 function copyPlain(id) {
-  const text = document.getElementById(`${id}-plain`)?.textContent || '';
+  const text = document.getElementById(`${id}-plain`)?.value || '';
   navigator.clipboard.writeText(text).then(() => {
     const btn = document.getElementById(`${id}-copy`);
     btn.classList.add('copied');
@@ -1181,12 +1170,12 @@ function _updateHistoryRows() {
       <div><i class="fa-regular fa-image me-1"></i> Image</div>
       <div><i class="fa-solid fa-table-list me-1"></i> Extracted Fields</div>
       <div><i class="fa-solid fa-align-left me-1"></i> Plain Text</div>
-      <div><i class="fa-solid fa-font me-1"></i> OCR Text</div>
       <div><i class="fa-solid fa-trash me-1"></i> Actions</div>
     </div>
     <div class="result-rows" id="historyRows">
       ${filtered.map(item => buildRow(`h${++rowIdx}`, { ...item, source: 'history' }, { historyMode: true })).join('')}
     </div>`;
+  _buildHistorySummary(filtered);
 }
 
 function renderHistoryTab(items) {
@@ -1266,7 +1255,7 @@ function renderHistoryTab(items) {
       </button>
     </div>`;
 
-  body.innerHTML = toolbar + sortBar + filterPanel + '<div id="hist-rows-wrap"></div>';
+  body.innerHTML = toolbar + sortBar + filterPanel + '<div id="hist-rows-wrap"></div><div id="hist-summary-wrap"></div>';
 
   if (!items.length) {
     document.getElementById('hist-rows-wrap').innerHTML =
@@ -1282,6 +1271,12 @@ async function deleteSessionItem(hash, btn) {
   try {
     await fetch(`/api/cache/${hash}`, { method: 'DELETE' });
     btn.closest('.result-row').remove();
+    // Remove from summary table
+    document.querySelector(`#summaryBody tr[data-hash="${hash}"]`)?.remove();
+    if (!document.querySelector('#summaryBody tr')) {
+      document.getElementById('summaryWrap').style.display = 'none';
+    }
+    updateExportBtn();
     updateTabCount();
     const body = document.getElementById('resultsBody');
     if (!body.children.length) {
@@ -1336,7 +1331,9 @@ async function resetSession() {
   const data = await res.json();
 
   document.getElementById('resultsBody').innerHTML = '';
+  document.getElementById('summaryBody').innerHTML  = '';
   document.getElementById('resultsWrap').style.display = 'none';
+  document.getElementById('summaryWrap').style.display = 'none';
   document.getElementById('emptyState').style.display  = '';
   updateTabCount();
   const added = data.added ?? 0;
@@ -1365,6 +1362,222 @@ function esc(s) {
 }
 function cap(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
 
+// ─────────────────────────────────────────────────────────────
+// Summary table
+// ─────────────────────────────────────────────────────────────
+function parsePlainText(text) {
+  const result = {};
+  for (const line of text.split('\n')) {
+    const idx = line.indexOf(':');
+    if (idx > 0) {
+      const key = line.slice(0, idx).trim().toLowerCase().replace(/\s+/g, '_');
+      result[key] = line.slice(idx + 1).trim();
+    }
+  }
+  return result;
+}
+
+function _summaryFields(data) {
+  const result     = data.result || {};
+  const correction = data.correction || '';
+  const effective  = correction ? { ...result, ...parsePlainText(correction) } : result;
+  const cat  = (effective.category   || '').toLowerCase();
+  const meal = (effective.meal_type  || '').toLowerCase().replace(/\s/g, '');
+  const catCol = (meal && meal !== 'unknown') ? `${cat}_${meal}` : cat;
+  const rawAmt = effective.total_amount ?? effective.amount ?? '';
+  // For hotel bills, use check-in date when date is absent
+  const date = effective.date || (cat === 'hotel' ? (effective.check_in || '') : '');
+  return {
+    filename: data.filename_generated || data.filename || '',
+    date,
+    catCol,
+    amount:   rawAmt !== '' ? String(rawAmt) : '',
+  };
+}
+
+function addSummaryRow(id, data) {
+  const tbody = document.getElementById('summaryBody');
+  if (!tbody) return;
+  const f = _summaryFields(data);
+  tbody.insertAdjacentHTML('beforeend', `
+    <tr id="sum-${id}" data-hash="${esc(data.hash || '')}">
+      <td style="text-align:center;"><input type="checkbox" class="row-check" onchange="updateExportBtn()"></td>
+      <td class="sum-filename">${esc(f.filename)}</td>
+      <td class="sum-date">${esc(f.date)}</td>
+      <td class="sum-cat">${esc(f.catCol)}</td>
+      <td class="sum-amount" style="text-align:right;">${esc(f.amount)}</td>
+    </tr>`);
+  document.getElementById('summaryWrap').style.display = '';
+  updateExportBtn();
+}
+
+function updateSummaryRow(id, correctionText) {
+  const row = document.getElementById(`sum-${id}`);
+  if (!row) return;
+  const parsed   = parsePlainText(correctionText);
+  const dateEl   = row.querySelector('.sum-date');
+  const catEl    = row.querySelector('.sum-cat');
+  const amtEl    = row.querySelector('.sum-amount');
+  if (dateEl && parsed.date)     dateEl.textContent = parsed.date;
+  if (catEl) {
+    const cat  = (parsed.category  || catEl.textContent.split('_')[0] || '').toLowerCase();
+    const meal = (parsed.meal_type || '').toLowerCase().replace(/\s/g, '');
+    catEl.textContent = (meal && meal !== 'unknown') ? `${cat}_${meal}` : cat;
+  }
+  if (amtEl) {
+    const rawAmt = parsed.total_amount ?? parsed.amount;
+    if (rawAmt !== undefined) amtEl.textContent = String(rawAmt);
+  }
+}
+
+function toggleSelectAll(cb) {
+  document.querySelectorAll('#summaryBody .row-check').forEach(c => c.checked = cb.checked);
+  updateExportBtn();
+}
+
+function updateExportBtn() {
+  const count   = document.querySelectorAll('#summaryBody .row-check:checked').length;
+  const btn     = document.getElementById('btnExport');
+  const countEl = document.getElementById('summarySelCount');
+  if (btn)     btn.disabled     = count === 0;
+  if (countEl) countEl.textContent = count ? `${count} selected` : '';
+  const allCbs = document.querySelectorAll('#summaryBody .row-check');
+  const selAll = document.getElementById('selectAll');
+  if (selAll && allCbs.length) {
+    selAll.indeterminate = count > 0 && count < allCbs.length;
+    selAll.checked       = count > 0 && count === allCbs.length;
+  }
+}
+
+async function exportSelected() {
+  const hashes = [...document.querySelectorAll('#summaryBody .row-check:checked')]
+    .map(cb => cb.closest('tr')?.dataset.hash).filter(Boolean);
+  if (!hashes.length) { showToast('No items selected', 'error'); return; }
+
+  const btn = document.getElementById('btnExport');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Exporting…';
+  try {
+    const res = await fetch('/api/export', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ hashes })
+    });
+    if (!res.ok) throw new Error(await res.text());
+    const blob = await res.blob();
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href = url; a.download = 'bills_export.zip'; a.click();
+    URL.revokeObjectURL(url);
+    showToast(`Exported ${hashes.length} item${hashes.length !== 1 ? 's' : ''}`, 'success');
+  } catch (err) {
+    showToast('Export failed: ' + err.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fa-solid fa-file-zipper"></i> Export Selected';
+    updateExportBtn();
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// History summary
+// ─────────────────────────────────────────────────────────────
+function _buildHistorySummary(items) {
+  const wrap = document.getElementById('hist-summary-wrap');
+  if (!wrap) return;
+  if (!items.length) { wrap.innerHTML = ''; return; }
+
+  const rows = items.map(item => {
+    const f = _summaryFields(item);
+    return `<tr data-hash="${esc(item.hash||'')}">
+      <td style="text-align:center;"><input type="checkbox" class="hist-row-check" onchange="updateHistExportBtn()"></td>
+      <td class="sum-filename">${esc(f.filename)}</td>
+      <td>${esc(f.date)}</td>
+      <td>${esc(f.catCol)}</td>
+      <td class="sum-amount">${esc(f.amount)}</td>
+    </tr>`;
+  }).join('');
+
+  wrap.innerHTML = `
+    <div class="summary-wrap" style="margin-top:1.25rem;">
+      <div class="summary-header">
+        <div class="summary-title"><i class="fa-solid fa-table-list"></i> Summary</div>
+        <div class="summary-actions">
+          <span class="summary-sel-count" id="hist-sel-count"></span>
+          <button class="btn-export" id="hist-btn-export" onclick="exportHistSelected()" disabled>
+            <i class="fa-solid fa-file-zipper"></i> Export Selected
+          </button>
+        </div>
+      </div>
+      <table class="summary-table">
+        <thead>
+          <tr>
+            <th style="width:36px;text-align:center;">
+              <input type="checkbox" id="hist-select-all" onchange="toggleHistSelectAll(this)">
+            </th>
+            <th>Filename</th>
+            <th>Date</th>
+            <th>Category</th>
+            <th style="text-align:right;">Amount</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+}
+
+function updateHistExportBtn() {
+  const count   = document.querySelectorAll('.hist-row-check:checked').length;
+  const btn     = document.getElementById('hist-btn-export');
+  const countEl = document.getElementById('hist-sel-count');
+  if (btn)     btn.disabled        = count === 0;
+  if (countEl) countEl.textContent = count ? `${count} selected` : '';
+  const allCbs = document.querySelectorAll('.hist-row-check');
+  const selAll = document.getElementById('hist-select-all');
+  if (selAll && allCbs.length) {
+    selAll.indeterminate = count > 0 && count < allCbs.length;
+    selAll.checked       = count > 0 && count === allCbs.length;
+  }
+}
+
+function toggleHistSelectAll(cb) {
+  document.querySelectorAll('.hist-row-check').forEach(c => c.checked = cb.checked);
+  updateHistExportBtn();
+}
+
+async function exportHistSelected() {
+  const hashes = [...document.querySelectorAll('.hist-row-check:checked')]
+    .map(cb => cb.closest('tr')?.dataset.hash).filter(Boolean);
+  if (!hashes.length) { showToast('No items selected', 'error'); return; }
+
+  const btn = document.getElementById('hist-btn-export');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Exporting…';
+  try {
+    const res = await fetch('/api/export', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ hashes })
+    });
+    if (!res.ok) throw new Error(await res.text());
+    const blob = await res.blob();
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href = url; a.download = 'bills_export.zip'; a.click();
+    URL.revokeObjectURL(url);
+    showToast(`Exported ${hashes.length} item${hashes.length !== 1 ? 's' : ''}`, 'success');
+  } catch (err) {
+    showToast('Export failed: ' + err.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fa-solid fa-file-zipper"></i> Export Selected';
+    updateHistExportBtn();
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// Toast
+// ─────────────────────────────────────────────────────────────
 let _toastTimer;
 function showToast(msg, type = 'info') {
   const t = document.getElementById('toast');

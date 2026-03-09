@@ -1,12 +1,15 @@
 from __future__ import annotations
 
+import csv
 import hashlib
+import io
 import json
 import os
+import zipfile
 from datetime import datetime
 from pathlib import Path
 
-from flask import Flask, jsonify, render_template, request, send_from_directory
+from flask import Flask, jsonify, render_template, request, send_file, send_from_directory
 
 os.environ["HF_HUB_OFFLINE"] = "1"
 os.environ["TRANSFORMERS_VERBOSITY"] = "error"
@@ -78,6 +81,40 @@ def _find_in_cache(h: str) -> dict | None:
     return None
 
 
+def _make_filename(result: dict, original_ext: str, uploads_dir: Path) -> str:
+    """Generate a human-readable filename from extracted fields."""
+    date_raw  = (result.get("date") or "").strip()
+    # For hotel bills, fall back to check-in date when date is absent
+    if not date_raw and result.get("category", "").lower() == "hotel":
+        date_raw = (result.get("check_in") or "").strip()
+    category  = (result.get("category") or "unknown").lower().strip()
+    meal_type = (result.get("meal_type") or "").lower().strip()
+
+    date_part = date_raw.replace("/", "-") if date_raw else "unknown-date"
+    cat_part  = f"{category}_{meal_type}" if meal_type and meal_type != "unknown" else category
+
+    ext  = original_ext if original_ext.startswith(".") else f".{original_ext}"
+    base = f"{date_part}_{cat_part}"
+    stem = base
+    counter = 1
+    while (uploads_dir / f"{stem}{ext}").exists():
+        counter += 1
+        stem = f"{base}_{counter}"
+    return f"{stem}{ext}"
+
+
+def _parse_plain_text(text: str) -> dict:
+    """Parse key: value plain-text correction back into a dict."""
+    result: dict = {}
+    for line in text.splitlines():
+        idx = line.find(":")
+        if idx > 0:
+            key = line[:idx].strip().lower().replace(" ", "_")
+            val = line[idx + 1:].strip()
+            result[key] = val
+    return result
+
+
 def _find_in_history(h: str) -> dict | None:
     for item in _load_history_flat():
         if item.get("hash") == h:
@@ -123,15 +160,14 @@ def process():
             _save(CACHE_FILE, cache)
         return jsonify({**from_history, "source": "history"})
 
-    # Save image
+    # Save image temporarily with hash name, then rename after extraction
     ext = Path(original_name).suffix or ".jpeg"
-    filename = f"{image_hash}{ext}"
-    image_path = UPLOADS_DIR / filename
-    image_path.write_bytes(image_bytes)
+    tmp_path = UPLOADS_DIR / f"{image_hash}{ext}"
+    tmp_path.write_bytes(image_bytes)
 
     # OCR + extract
     try:
-        ocr_lines = ocr_process(str(image_path))
+        ocr_lines = ocr_process(str(tmp_path))
         result = extractor.extract(ocr_lines)
         status = "ok"
     except Exception as exc:
@@ -139,10 +175,16 @@ def process():
         result = {}
         status = f"error: {exc}"
 
+    # Rename to human-readable filename
+    generated_name = _make_filename(result, ext, UPLOADS_DIR)
+    final_path = UPLOADS_DIR / generated_name
+    tmp_path.rename(final_path)
+
     item = {
         "hash": image_hash,
         "filename": original_name,
-        "image_url": f"/uploads/{filename}",
+        "filename_generated": generated_name,
+        "image_url": f"/uploads/{generated_name}",
         "ocr_text": ocr_lines,
         "result": result,
         "timestamp": datetime.now().isoformat(timespec="seconds"),
@@ -237,6 +279,69 @@ def reset():
         added = 0
     _save(CACHE_FILE, [])
     return jsonify({"ok": True, "added": added})
+
+
+@app.route("/api/export", methods=["POST"])
+def export_items():
+    body   = request.get_json(silent=True) or {}
+    hashes = set(body.get("hashes", []))
+
+    # Search both cache and history so the export works from either tab
+    all_items = _load(CACHE_FILE, []) + _load_history_flat()
+    seen: set = set()
+    selected: list = []
+    for item in all_items:
+        h = item.get("hash")
+        if h in hashes and h not in seen:
+            seen.add(h)
+            selected.append(item)
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        # Images
+        for item in selected:
+            generated = item.get("filename_generated", "")
+            img_path  = UPLOADS_DIR / generated if generated else None
+            if img_path is None or not img_path.exists():
+                # Legacy hash-named file
+                for ext in (".jpeg", ".jpg", ".png", ".webp"):
+                    p = UPLOADS_DIR / f"{item['hash']}{ext}"
+                    if p.exists():
+                        img_path = p
+                        break
+            if img_path and img_path.exists():
+                zf.write(img_path, generated or img_path.name)
+
+        # summary.csv
+        csv_buf = io.StringIO()
+        writer  = csv.writer(csv_buf)
+        writer.writerow(["Filename", "Date", "Category", "Amount", "Currency"])
+        for item in selected:
+            result     = dict(item.get("result") or {})
+            correction = item.get("correction", "")
+            if correction:
+                result.update(_parse_plain_text(correction))
+
+            cat  = result.get("category", "")
+            meal = (result.get("meal_type") or "").lower().strip()
+            cat_col = f"{cat}_{meal}" if meal and meal != "unknown" else cat
+
+            writer.writerow([
+                item.get("filename_generated") or item.get("filename", ""),
+                result.get("date", ""),
+                cat_col,
+                result.get("total_amount") or result.get("amount", ""),
+                result.get("currency", ""),
+            ])
+        zf.writestr("summary.csv", csv_buf.getvalue())
+
+    buf.seek(0)
+    return send_file(
+        buf,
+        mimetype="application/zip",
+        as_attachment=True,
+        download_name="bills_export.zip",
+    )
 
 
 def main():
