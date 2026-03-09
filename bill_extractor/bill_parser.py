@@ -428,7 +428,7 @@ class BillingInformationExtractor:
         # float16 is faster on GPU/MPS; float32 on CPU avoids precision issues
         dtype = torch.float32 if self.device.type == "cpu" else torch.float16
         print(f"Using device: {self.device} (dtype={dtype})")
-        self.tokenizer = AutoTokenizer.from_pretrained(self.config.model_name)
+        self.tokenizer = AutoTokenizer.from_pretrained(self.config.model_name, use_fast=True)
         self.model = AutoModelForCausalLM.from_pretrained(
             self.config.model_name,
             dtype=dtype,
