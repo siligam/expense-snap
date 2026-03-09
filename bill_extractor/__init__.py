@@ -1,17 +1,9 @@
 """
-Bill Extractor — extract expense summaries from receipt photos and trip screenshots.
+bill_extractor — Extract structured expense data from receipt photos.
+
+Pipeline: DocTR OCR → Qwen2.5-1.5B-Instruct LLM → structured JSON.
+Run the web app with:  bill-extractor
+Download models first:  bill-extractor-download
 """
 
-from .extract_bill_summary import (
-    extract_summary,
-    extract_receipt_summary,
-    extract_trip_screenshot_summary,
-    detect_image_type,
-)
-
-__all__ = [
-    'extract_summary',
-    'extract_receipt_summary',
-    'extract_trip_screenshot_summary',
-    'detect_image_type',
-]
+__version__ = "0.3.0"

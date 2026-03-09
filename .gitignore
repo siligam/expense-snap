@@ -1,13 +1,9 @@
-# Images
-*.jpeg
-*.jpg
-*.png
-*.gif
-*.bmp
-*.webp
+# Sample / test images
+samples/
 
-# Uploads (runtime directory)
-uploads/
+# Runtime directories
+bill_extractor/data/
+bill_extractor/uploads/
 
 # Python
 __pycache__/
