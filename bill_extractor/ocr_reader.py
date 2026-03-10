@@ -46,6 +46,39 @@ def filter_noise(lines: list[str]) -> list[str]:
     return [l for l in lines if not _is_noise(l)]
 
 
+def _fix_rupee_symbol_misread(text: str) -> str:
+    """
+    Fix common OCR error where rupee symbol (₹) is misread as "7".
+    
+    Pattern: "7" followed immediately by digits (no space) at word boundaries
+    is likely a misread rupee symbol, especially in amount contexts.
+    
+    Examples:
+    - "7655.00" → "₹655.00"
+    - "Total 7500" → "Total ₹500"
+    - "Grand Total 71,234.50" → "Grand Total ₹1,234.50"
+    - "285.71" → "₹85.71"
+    """
+    # Pattern 1: "7" at start of amount (e.g., "7655.00" → "₹655.00")
+    text = re.sub(
+        r'\b7(\d[\d,]*\.?\d*)\b',
+        r'₹\1',
+        text
+    )
+    # Pattern 2: "7" in middle of amount (e.g., "285.71" → "₹85.71")
+    text = re.sub(
+        r'\b(\d+)7(\d+\.\d+)\b',
+        r'₹\2',
+        text
+    )
+    return text
+
+
+def correct_ocr_errors(lines: list[str]) -> list[str]:
+    """Apply post-OCR corrections for common misinterpretations."""
+    return [_fix_rupee_symbol_misread(line) for line in lines]
+
+
 # ---------------------------------------------------------------------------
 # Core OCR functions
 # ---------------------------------------------------------------------------
@@ -107,11 +140,12 @@ def getlines(lines: list[list[dict]]) -> list[str]:
 
 
 def process(image_path: str) -> list[str]:
-    """Full pipeline: image → OCR → sorted lines → noise filtered."""
+    """Full pipeline: image → OCR → sorted lines → corrected → noise filtered."""
     data  = readimage(image_path)
     words = extract_words(data)
     lines = cluster_lines(words)
     texts = getlines(lines)
+    texts = correct_ocr_errors(texts)
     return filter_noise(texts)
 
 
