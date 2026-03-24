@@ -12,8 +12,9 @@ dependencies = [
     # Web framework
     "flask>=3.0",
 
-    # OCR — DocTR with PyTorch backend
+    # OCR — DocTR with PyTorch backend (pypdfium2 enables PDF support)
     "python-doctr[torch]>=0.9.0",
+    "pypdfium2>=4.0",
     "opencv-python-headless>=4.8.0",
     "Pillow>=10.0",
 

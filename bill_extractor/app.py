@@ -140,7 +140,7 @@ def serve_upload(filename: str):
 def process():
     file = request.files.get("image")
     if not file:
-        return jsonify({"error": "No image provided"}), 400
+        return jsonify({"error": "No file provided"}), 400
 
     image_bytes = file.read()
     image_hash = _hash(image_bytes)
@@ -304,7 +304,7 @@ def export_items():
             img_path  = UPLOADS_DIR / generated if generated else None
             if img_path is None or not img_path.exists():
                 # Legacy hash-named file
-                for ext in (".jpeg", ".jpg", ".png", ".webp"):
+                for ext in (".jpeg", ".jpg", ".png", ".webp", ".pdf"):
                     p = UPLOADS_DIR / f"{item['hash']}{ext}"
                     if p.exists():
                         img_path = p

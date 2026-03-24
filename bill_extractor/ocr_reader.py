@@ -89,6 +89,12 @@ def readimage(image_path: str) -> dict:
     return result.export()
 
 
+def readpdf(pdf_path: str) -> dict:
+    doc = DocumentFile.from_pdf(pdf_path)
+    result = model(doc)
+    return result.export()
+
+
 def readimages(*image_paths: str) -> dict:
     doc = DocumentFile.from_images(*image_paths)
     result = model(doc)
@@ -139,9 +145,12 @@ def getlines(lines: list[list[dict]]) -> list[str]:
     return [" ".join(w["text"] for w in line) for line in lines]
 
 
-def process(image_path: str) -> list[str]:
-    """Full pipeline: image → OCR → sorted lines → corrected → noise filtered."""
-    data  = readimage(image_path)
+def process(file_path: str) -> list[str]:
+    """Full pipeline: image or PDF → OCR → sorted lines → corrected → noise filtered."""
+    if file_path.lower().endswith(".pdf"):
+        data = readpdf(file_path)
+    else:
+        data = readimage(file_path)
     words = extract_words(data)
     lines = cluster_lines(words)
     texts = getlines(lines)
