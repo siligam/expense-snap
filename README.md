@@ -1,16 +1,16 @@
 # Bill Extractor
 
-Automatically extract structured expense data from receipt photos using a two-stage AI pipeline: **DocTR** for OCR and **Qwen2.5-1.5B-Instruct** for structured field extraction. Results are served through a web interface with drag-and-drop upload, session history, filtering, and manual correction support.
+Automatically extract structured expense data from receipt photos and PDFs using a two-stage AI pipeline: **DocTR** for OCR and **Qwen2.5-1.5B-Instruct** for structured field extraction. Results are served through a web interface with drag-and-drop upload, session history, filtering, and manual correction support.
 
 ---
 
 ## How it works
 
 ```
-Receipt photo  →  DocTR OCR  →  Qwen2.5-1.5B LLM  →  Structured JSON
+Receipt photo or PDF  →  DocTR OCR  →  Qwen2.5-1.5B LLM  →  Structured JSON
 ```
 
-1. **DocTR** reads the receipt image and extracts raw text lines
+1. **DocTR** reads the receipt image or PDF and extracts raw text lines
 2. A two-step LLM pipeline first classifies the receipt category (food / travel / hotel), then extracts the relevant fields for that category
 3. Results are displayed in the web UI and persisted across sessions
 
@@ -77,7 +77,7 @@ Open your browser at **http://localhost:8080**
 
 ## Web interface
 
-- **Drag and drop** receipt images anywhere on the page (or click to browse)
+- **Drag and drop** receipt images or PDFs anywhere on the page (or click to browse)
 - **Multiple files** can be uploaded at once — each is processed in order
 - **Duplicate detection** — the same image is never processed twice; cached results are returned instantly
 - **Current Session tab** — live results with extracted fields, plain text (copy-paste ready), and raw OCR text
@@ -130,7 +130,8 @@ bill_extractor/
 │   ├── ocr_reader.py        # DocTR OCR wrapper
 │   └── templates/
 │       └── index.html       # single-page web UI
-├── samples/                 # test receipt images (git-ignored)
+├── tests/                   # pytest unit and integration tests
+├── samples/                 # test receipt images and PDFs (git-ignored)
 └── pyproject.toml           # package metadata and dependencies
 ```
 
@@ -152,6 +153,7 @@ bill_extractor/
 |---------|---------|
 | `flask` | Web framework |
 | `python-doctr[torch]` | OCR — text detection and recognition |
+| `pypdfium2` | PDF page rendering for DocTR |
 | `torch` | Deep learning runtime (MPS / CUDA / CPU) |
 | `transformers` | Qwen2.5-1.5B-Instruct model loading and inference |
 | `accelerate` | Device placement for transformer models |

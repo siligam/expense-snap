@@ -9,7 +9,7 @@ TRAVEL_EXAMPLE_LINES = [
     "A",
     "Cosmos Park",
     "Auto ride",
-    "with dattatray",
+    "with driver",
     "27 Feb 10:31AM",
     "42.32",
     "Receipt Invoice",
@@ -35,7 +35,7 @@ TRAVEL_EXAMPLE_OUTPUT = {
 
 HOTEL_EXAMPLE_LINES = [
     "INVOICE 28/02/2026",
-    "CECOON",
+    "EXAMPLE",
     "HOTEL",
     "TAXI INVOICE",
     "INVOICE TO -",

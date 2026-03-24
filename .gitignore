@@ -25,5 +25,8 @@ venv/
 .vscode/
 .idea/
 
+# npm (not used in this project)
+package-lock.json
+
 # Claude
 .claude/
