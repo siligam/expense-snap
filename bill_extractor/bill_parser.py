@@ -273,7 +273,7 @@ Extract exactly these fields:
 Rules:
 - category must be exactly "food"
 - currency must be exactly "INR"
-- total_amount must be the final payable amount, preferably near labels like Grand Total, Total Amount, Total, Net Amount, Final Amount
+- total_amount must be the final payable amount, preferably near labels like Grand Total, Total Amount, Total, Total AMT, Gross AMT, Net Amount, Final Amount; prefer "Total AMT" or "Gross AMT" over "Net AMT" when both are present
 - use the bill date as found; format it as DD/MM/YYYY — always use numeric month (e.g. "27 Feb 2026" → "27/02/2026", "24/02/26" → "24/02/2026"); include the 4-digit year when available or inferable
 - use the bill time as it appears in the OCR if found (may appear as HH:MM or alongside a date, e.g. "23/02/2026 19:13")
 - meal_type rules:
