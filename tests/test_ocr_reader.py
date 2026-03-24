@@ -28,6 +28,10 @@ class TestFixRupeeSymbolMisread:
     def test_rupee_with_comma_thousands(self):
         assert _fix_rupee_symbol_misread("Grand Total 71,234.50") == "Grand Total ₹1,234.50"
 
+    def test_rupee_misread_as_1_space(self):
+        """Regression: '1 226.00' after a label colon must become '₹226.00'."""
+        assert _fix_rupee_symbol_misread("Total Payable: 1 226.00") == "Total Payable: ₹226.00"
+
     # --- should NOT corrupt ---
     def test_270_not_corrupted(self):
         """Regression: 270.02 must not become ₹0.02."""
@@ -41,6 +45,18 @@ class TestFixRupeeSymbolMisread:
 
     def test_270_no_decimal_not_corrupted(self):
         assert _fix_rupee_symbol_misread("270") == "270"
+
+    def test_small_price_74_not_corrupted(self):
+        """Regression: 74.00 must not become ₹4.00."""
+        assert _fix_rupee_symbol_misread("74.00") == "74.00"
+
+    def test_small_price_76_not_corrupted(self):
+        """Regression: 76.00 must not become ₹6.00."""
+        assert _fix_rupee_symbol_misread("76.00") == "76.00"
+
+    def test_decimal_digit_7_not_corrupted(self):
+        """Regression: 10.76 must not become 10.₹6."""
+        assert _fix_rupee_symbol_misread("10.76") == "10.76"
 
     def test_amount_with_7_in_middle_not_corrupted(self):
         assert _fix_rupee_symbol_misread("257.16") == "257.16"

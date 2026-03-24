@@ -48,20 +48,35 @@ def filter_noise(lines: list[str]) -> list[str]:
 
 def _fix_rupee_symbol_misread(text: str) -> str:
     """
-    Fix common OCR error where rupee symbol (₹) is misread as "7".
+    Fix common OCR misreads of the rupee symbol (₹).
 
-    Only corrects the case where "7" appears at the start of an amount token,
-    i.e. the "7" is the very first character of the number (word boundary).
+    Two patterns are handled:
 
-    Examples:
-    - "7655.00" → "₹655.00"
-    - "Total 7500" → "Total ₹500"
-    - "Grand Total 71,234.50" → "Grand Total ₹1,234.50"
+    1. ₹ misread as "7": only fires when "7" starts a token of 3+ digits,
+       so small prices like 74.00 or 76.00 are left untouched.
+       Also requires the "7" is not preceded by "." or a digit, preventing
+       false matches inside decimals like 10.76.
+       Examples: "7500" → "₹500", "7226.00" → "₹226.00"
+
+    2. ₹ misread as "1 " (one + space) after a label colon: e.g. OCR reads
+       "Total Payable: ₹ 226.00" as "Total Payable: 1 226.00".
+       Only fires when a standalone "1" immediately follows ": " and is
+       followed by a 2+ digit number.
+       Examples: "Total Payable: 1 226.00" → "Total Payable: ₹226.00"
     """
-    # "7" at start of amount (e.g., "7655.00" → "₹655.00")
+    # Pattern 1: "7" misread — two branches to avoid false positives on small
+    # prices (74.00, 76.00) and decimal digits (10.76):
+    #   branch A: 3+ consecutive digits  → handles 7500, 7226.00
+    #   branch B: 1-2 digits then comma-thousands → handles 71,234.50
     text = re.sub(
-        r'\b7(\d[\d,]*\.?\d*)\b',
+        r'(?<![.\d])7(\d{3,}[\d,]*(?:\.\d+)?|\d{1,2},\d{3}(?:,\d{3})*(?:\.\d+)?)\b',
         r'₹\1',
+        text
+    )
+    # Pattern 2: "1 NNN" after a colon — ₹ misread as "1 "
+    text = re.sub(
+        r'(:\s*)1\s+(\d{2,}[\d,]*(?:\.\d+)?)',
+        r'\1₹\2',
         text
     )
     return text

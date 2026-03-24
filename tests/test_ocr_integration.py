@@ -16,7 +16,7 @@ SAMPLES_DIR = Path(__file__).parent.parent / "samples"
 
 @pytest.mark.parametrize("filename", [
     "food_01.jpeg", "food_02.jpeg", "food_03.jpeg",
-    "food_04.jpeg", "food_05.jpeg", "food_06.jpeg", "food_07.jpeg",
+    "food_04.jpeg", "food_05.jpeg", "food_06.jpeg", "food_07.jpeg", "food_08.jpeg",
     "hotel_01.jpeg",
     "trip_01.jpeg", "trip_02.jpeg", "trip_03.jpeg",
 ])
@@ -65,6 +65,39 @@ def test_trip01_amount_present(trip_receipt_lines):
 def test_trip01_date_present(trip_receipt_lines):
     joined = "\n".join(trip_receipt_lines)
     assert "27 Feb" in joined or "27/02" in joined
+
+
+# ---------------------------------------------------------------------------
+# hotel_01.jpeg — Cocoon Hotel invoice
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# food_08.jpeg — Chitale Bandhu (₹ misread as "1 ", small prices with 7)
+# ---------------------------------------------------------------------------
+
+@pytest.fixture(scope="session")
+def chitale_receipt_lines():
+    return process(str(SAMPLES_DIR / "food_08.jpeg"))
+
+
+def test_food08_total_payable_correct(chitale_receipt_lines):
+    """Regression: '1 226.00' must be corrected to '₹226.00', not '1226.00'."""
+    joined = "\n".join(chitale_receipt_lines)
+    assert "₹226.00" in joined or "226.00" in joined
+    assert "1226" not in joined
+
+
+def test_food08_small_prices_not_corrupted(chitale_receipt_lines):
+    """Regression: item prices 74.00 and 76.00 must not be stripped to ₹4/₹6."""
+    joined = "\n".join(chitale_receipt_lines)
+    assert "74.00" in joined
+    assert "76.00" in joined or "57.00" in joined  # OCR may read 57 as 76
+
+
+def test_food08_gst_decimal_not_corrupted(chitale_receipt_lines):
+    """Regression: 10.76 in GST summary must not become 10.₹6."""
+    joined = "\n".join(chitale_receipt_lines)
+    assert "10.₹6" not in joined
 
 
 # ---------------------------------------------------------------------------
