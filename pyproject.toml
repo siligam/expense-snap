@@ -4,16 +4,17 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "bill-extractor"
-version = "0.3.0"
-description = "Extract structured expense data from receipt photos using DocTR OCR + Qwen2.5 LLM"
+version = "0.4.0"
+description = "Extract structured expense data from receipt photos and PDFs using DocTR OCR + Qwen2.5 LLM"
 requires-python = ">=3.10"
 
 dependencies = [
     # Web framework
     "flask>=3.0",
 
-    # OCR — DocTR with PyTorch backend
+    # OCR — DocTR with PyTorch backend (pypdfium2 enables PDF support)
     "python-doctr[torch]>=0.9.0",
+    "pypdfium2>=4.0",
     "opencv-python-headless>=4.8.0",
     "Pillow>=10.0",
 
@@ -37,6 +38,10 @@ bill-extractor-cli      = "bill_extractor.main:main"
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["bill_extractor*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-v"
 
 [tool.setuptools.package-data]
 bill_extractor = ["templates/*.html"]

@@ -610,8 +610,8 @@
   <div id="dropZone" onclick="document.getElementById('fileInput').click()">
     <i class="fa-solid fa-cloud-arrow-up drop-icon"></i>
     <p class="drop-text"><strong>Drag &amp; drop</strong> bill images anywhere — or click to browse</p>
-    <p class="drop-text" style="margin-top:4px;font-size:0.78rem;">JPEG, PNG, WEBP · Multiple files supported</p>
-    <input type="file" id="fileInput" accept="image/*" multiple style="display:none" onchange="handleFileInput(this)" />
+    <p class="drop-text" style="margin-top:4px;font-size:0.78rem;">JPEG, PNG, WEBP, PDF · Multiple files supported</p>
+    <input type="file" id="fileInput" accept="image/*,.pdf" multiple style="display:none" onchange="handleFileInput(this)" />
   </div>
 
   <!-- Results -->
@@ -742,7 +742,7 @@ document.addEventListener('drop', e => {
   e.preventDefault();               // stop browser from opening the file
   clearTimeout(_dragHideTimer);
   overlay.classList.remove('show');
-  const files = [...e.dataTransfer.files].filter(f => f.type.startsWith('image/'));
+  const files = [...e.dataTransfer.files].filter(f => f.type.startsWith('image/') || f.type === 'application/pdf');
   if (files.length) handleFiles(files);
 });
 
@@ -760,9 +760,9 @@ function handleFileInput(input) {
 }
 
 async function handleFiles(files) {
-  const imgs = files.filter(f => f.type.startsWith('image/'));
-  if (!imgs.length) { showToast('No image files found', 'error'); return; }
-  for (const f of imgs) await processFile(f);
+  const supported = files.filter(f => f.type.startsWith('image/') || f.type === 'application/pdf');
+  if (!supported.length) { showToast('No supported files found (JPEG, PNG, WEBP, PDF)', 'error'); return; }
+  for (const f of supported) await processFile(f);
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -837,14 +837,20 @@ function buildRow(id, data, opts = {}) {
   const hash   = data.hash   || '';
   const plain  = data.correction || toPlainText(result);
 
-  // Col 1 — image
+  // Col 1 — image or PDF preview
   const genName  = data.filename_generated || '';
   const origName = data.filename || '';
+  const isPdf    = (data.image_url || '').toLowerCase().endsWith('.pdf');
+  const thumbHtml = isPdf
+    ? `<a href="${esc(data.image_url)}" target="_blank" class="thumb-img" style="display:flex;align-items:center;justify-content:center;background:#1e293b;text-decoration:none;cursor:pointer;">
+         <i class="fa-solid fa-file-pdf" style="font-size:3rem;color:#f87171;"></i>
+       </a>`
+    : `<img src="${esc(data.image_url)}" class="thumb-img"
+           alt="${esc(origName)}"
+           onclick="openLightbox('${esc(data.image_url)}')" />`;
   const c1 = `
     <div class="rc">
-      <img src="${esc(data.image_url)}" class="thumb-img"
-           alt="${esc(origName)}"
-           onclick="openLightbox('${esc(data.image_url)}')" />
+      ${thumbHtml}
       <div class="thumb-name">${esc(genName || origName)}</div>
       ${genName && genName !== origName
         ? `<div class="thumb-name" style="color:#94a3b8;font-size:0.62rem;font-style:italic;">${esc(origName)}</div>`
