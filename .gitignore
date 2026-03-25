@@ -28,5 +28,8 @@ venv/
 # npm (not used in this project)
 package-lock.json
 
+# Local reference docs (not for version control)
+ARCHITECTURE.md
+
 # Claude
 .claude/
