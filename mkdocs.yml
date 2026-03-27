@@ -1,0 +1,36 @@
+site_name: Bill Extractor
+site_description: Extract structured expense data from receipt photos and PDFs
+site_url: ""
+docs_dir: docs
+theme:
+  name: material
+  palette:
+    - scheme: default
+      primary: blue
+      accent: blue
+  features:
+    - navigation.sections
+    - navigation.top
+    - content.code.copy
+  icon:
+    repo: fontawesome/brands/github
+
+nav:
+  - Overview: index.md
+  - Getting started: getting-started.md
+  - Configuration: configuration.md
+  - Web UI: web-ui.md
+  - REST API: api.md
+  - Architecture: architecture.md
+  - Development: development.md
+
+markdown_extensions:
+  - admonition
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - tables
+  - toc:
+      permalink: true

@@ -16,7 +16,8 @@ dependencies = [
     "httpx>=0.27.0",             # async proxy to remote OCR server
 
     # OCR — DocTR with PyTorch backend (pypdfium2 enables PDF support)
-    "python-doctr[torch]>=0.9.0",
+    # Note: [torch] extra was removed in doctr v1.0; PyTorch is now the only backend
+    "python-doctr>=0.9.0",
     "pypdfium2>=4.0",
     "opencv-python-headless>=4.8.0",
     "Pillow>=10.0",
