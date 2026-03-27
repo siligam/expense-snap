@@ -18,6 +18,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response
 
 _BASE_DIR = Path(__file__).parent
+logger = logging.getLogger("bill_extractor")
 
 from .bill_parser import BillingInformationExtractor, BillingExtractionConfig
 from .config import Config, load_config
@@ -249,7 +250,7 @@ def create_app(
         CORSMiddleware,
         allow_origins=allowed_origins,
         allow_origin_regex=r".*" if "*" in allowed_origins else None,
-        allow_methods=["POST", "GET", "DELETE"],
+        allow_methods=["GET", "POST", "PATCH", "DELETE"],
         allow_headers=["*"],
     )
 
@@ -285,55 +286,57 @@ def create_app(
         if not contents:
             raise HTTPException(status_code=400, detail="Uploaded file is empty.")
 
-        # Round-robin over enabled remote OCR servers, fall back to local
+        # Round-robin across all enabled servers (local + remote)
         global _ocr_rr_idx
         _servers = _config.ocr_servers if _config else []
-        remote_urls = [
-            s["url"] for s in _servers
-            if s.get("enabled") and s.get("url") != "local"
-        ]
-        use_local = not remote_urls or any(
-            s.get("url") == "local" and s.get("enabled") for s in _servers
-        )
-        if remote_urls:
-            start = _ocr_rr_idx % len(remote_urls)
-            for i in range(len(remote_urls)):
-                url = remote_urls[(start + i) % len(remote_urls)]
+        pool = [s["url"] for s in _servers if s.get("enabled")]
+
+        if not pool:
+            raise HTTPException(status_code=503, detail="No OCR servers configured.")
+
+        # Grab and advance the index before any await so concurrent requests
+        # each get a distinct starting position (no yield point between read and write).
+        start = _ocr_rr_idx % len(pool)
+        _ocr_rr_idx = (start + 1) % len(pool)
+        for i in range(len(pool)):
+            url = pool[(start + i) % len(pool)]
+
+            if url == "local":
+                await _ensure_models()
+                tmp = tempfile.NamedTemporaryFile(suffix=ext, delete=False)
+                try:
+                    tmp.write(contents)
+                    tmp.close()
+                    async with _semaphore:
+                        loop = asyncio.get_running_loop()
+                        ocr_lines, result = await loop.run_in_executor(
+                            None, _run_inference, tmp.name
+                        )
+                except HTTPException:
+                    raise
+                except Exception as exc:
+                    raise HTTPException(
+                        status_code=500, detail=f"Extraction failed: {exc}"
+                    ) from exc
+                finally:
+                    Path(tmp.name).unlink(missing_ok=True)
+                completed_at = datetime.now(timezone.utc).isoformat()
+                logger.info("extract: %s  server=local", file.filename or "upload")
+                return {"ocr_text": ocr_lines, **result, "status": "ok",
+                        "provenance": _make_provenance(submitted_at, completed_at, "local")}
+            else:
                 try:
                     ocr_lines, result = await _proxy_extract(
                         url, file.filename or "upload", ext, contents
                     )
-                    _ocr_rr_idx = (start + i + 1) % len(remote_urls)
                     completed_at = datetime.now(timezone.utc).isoformat()
+                    logger.info("extract: %s  server=%s", file.filename or "upload", url)
                     return {"ocr_text": ocr_lines, **result, "status": "ok",
                             "provenance": _make_provenance(submitted_at, completed_at, url)}
                 except httpx.HTTPError:
-                    continue  # try next server
+                    continue  # server unreachable — try next in pool
 
-        if not use_local:
-            raise HTTPException(status_code=503, detail="No OCR servers reachable.")
-
-        # Local inference
-        await _ensure_models()
-        tmp = tempfile.NamedTemporaryFile(suffix=ext, delete=False)
-        try:
-            tmp.write(contents)
-            tmp.close()
-            async with _semaphore:
-                loop = asyncio.get_running_loop()
-                ocr_lines, result = await loop.run_in_executor(
-                    None, _run_inference, tmp.name
-                )
-        except HTTPException:
-            raise
-        except Exception as exc:
-            raise HTTPException(status_code=500, detail=f"Extraction failed: {exc}") from exc
-        finally:
-            Path(tmp.name).unlink(missing_ok=True)
-
-        completed_at = datetime.now(timezone.utc).isoformat()
-        return {"ocr_text": ocr_lines, **result, "status": "ok",
-                "provenance": _make_provenance(submitted_at, completed_at, "local")}
+        raise HTTPException(status_code=503, detail="No OCR servers reachable.")
 
     # ----------------------------------------------------------------
     # Routes — full-stack only (history + file serving + UI)
@@ -537,6 +540,7 @@ def main():
     extract_p = sub.add_parser("extract", help="Extract a single file")
     extract_p.add_argument("file", help="Path to image or PDF")
     extract_p.add_argument("--server", default=None, help="Remote server URL")
+    extract_p.add_argument("--save", action="store_true", help="Save result to history and files/")
 
     sub.add_parser("init", help="Download models and initialise data directory (run once after install)")
 
@@ -544,7 +548,7 @@ def main():
 
     if args.cmd == "extract":
         import sys
-        _run_extract_cmd(args.file, args.server)
+        _run_extract_cmd(args.file, args.server, save=args.save)
         sys.exit(0)
 
     if args.cmd == "init":
@@ -619,8 +623,10 @@ def _run_init_cmd() -> None:
     print("    bill-extractor serve\n")
 
 
-def _run_extract_cmd(file_path: str, server_url: str | None) -> None:
+def _run_extract_cmd(file_path: str, server_url: str | None, save: bool = False) -> None:
+    import hashlib
     import sys
+    from datetime import datetime, timezone
     import httpx as _httpx
 
     path = Path(file_path)
@@ -639,8 +645,7 @@ def _run_extract_cmd(file_path: str, server_url: str | None) -> None:
         urls_to_try.append(server_url)
     urls_to_try.append(f"http://localhost:{cfg.port}")
 
-    with open(file_path, "rb") as f:
-        data = f.read()
+    data = path.read_bytes()
 
     for url in urls_to_try:
         try:
@@ -650,7 +655,41 @@ def _run_extract_cmd(file_path: str, server_url: str | None) -> None:
                     files={"file": (path.name, data, _mime(ext))},
                 )
                 resp.raise_for_status()
-                print(json.dumps(resp.json(), indent=2, ensure_ascii=False))
+                result = resp.json()
+                print(json.dumps(result, indent=2, ensure_ascii=False))
+
+                if save:
+                    file_hash = hashlib.md5(data).hexdigest()
+                    ocr_text = result.pop("ocr_text", [])
+                    result.pop("status", None)
+                    provenance = result.pop("provenance", {})
+                    # Build generated filename from extracted fields
+                    parts = []
+                    if result.get("date"):
+                        parts.append(result["date"].replace("/", "-"))
+                    if result.get("category"):
+                        parts.append(result["category"])
+                    if result.get("meal_type"):
+                        parts.append(result["meal_type"])
+                    filename_generated = ("_".join(parts) + ext) if parts else path.name
+                    record = {
+                        "hash": file_hash,
+                        "filename": path.name,
+                        "filename_generated": filename_generated,
+                        "ocr_text": ocr_text,
+                        "result": result,
+                        "provenance": provenance,
+                        "correction": "",
+                        "action": "",
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                    }
+                    save_resp = client.post(
+                        url.rstrip("/") + "/history",
+                        data={"record": json.dumps(record)},
+                        files={"file": (path.name, data, _mime(ext))},
+                    )
+                    save_resp.raise_for_status()
+                    print(f"Saved: {save_resp.json().get('original_file', path.name)}", file=sys.stderr)
                 return
         except _httpx.HTTPError:
             continue

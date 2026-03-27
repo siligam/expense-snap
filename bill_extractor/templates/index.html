@@ -816,8 +816,17 @@
             <input v-else class="form-input" style="flex:1;font-size:0.82rem;font-family:monospace"
                    v-model="srv.url" placeholder="http://server:8080" />
             <span style="font-size:0.75rem;width:70px;flex-shrink:0"
-                  :style="{color: srv.url==='local' ? (ocrHealth?.model_loaded ? '#16a34a' : '#94a3b8') : '#94a3b8'}">
-              {{ srv.url==='local' ? (ocrHealth?.model_loaded ? '● online' : '○ offline') : '○ unknown' }}
+                  :style="{color: srv.url==='local'
+                    ? (ocrHealth?.model_loaded ? '#16a34a' : '#94a3b8')
+                    : remoteHealth[srv.url]==='online'  ? '#16a34a'
+                    : remoteHealth[srv.url]==='offline' ? '#ef4444'
+                    : '#94a3b8'}">
+              {{ srv.url==='local'
+                  ? (ocrHealth?.model_loaded ? '● online' : '○ loading')
+                  : remoteHealth[srv.url]==='checking' ? '… checking'
+                  : remoteHealth[srv.url]==='online'   ? '● online'
+                  : remoteHealth[srv.url]==='offline'  ? '✕ offline'
+                  : '○ unknown' }}
             </span>
             <button v-if="srv.url!=='local'" class="btn btn-ghost btn-sm" @click="removeServer(i)"
                     title="Remove server" style="padding:2px 6px;color:#ef4444">✕</button>
@@ -955,11 +964,24 @@ createApp({
     const globalDragging = ref(false);
     const lightboxSrc    = ref('');
 
-    // OCR health
-    const ocrHealth = ref(null);
+    // OCR health — local + per-remote
+    const ocrHealth    = ref(null);
+    const remoteHealth = ref({});   // url → 'online' | 'offline' | 'checking'
     async function checkHealth() {
       try { ocrHealth.value = await apiGet('/health'); }
       catch { ocrHealth.value = null; }
+
+      // Poll each non-local server in parallel
+      const remotes = (cfgEdit.value.ocr_servers || []).filter(s => s.url !== 'local');
+      await Promise.all(remotes.map(async s => {
+        remoteHealth.value[s.url] = 'checking';
+        try {
+          const r = await fetch(s.url + '/health', {signal: AbortSignal.timeout(4000)});
+          remoteHealth.value[s.url] = r.ok ? 'online' : 'offline';
+        } catch {
+          remoteHealth.value[s.url] = 'offline';
+        }
+      }));
     }
 
     // Server config
@@ -1523,8 +1545,8 @@ createApp({
       });
 
       await loadHistory();
+      await loadServerCfg();
       checkHealth();
-      loadServerCfg();
     });
 
     return {
@@ -1546,7 +1568,7 @@ createApp({
       editVisible,editRec,openEdit,saveEdit,deleteRec,
       exportCSV,
       fmtAmt,catClass,catIcon,badgeClass,fmtTs,fmtBytes,
-      ocrHealth,checkHealth,serverCfg,cfgEdit,cfgSaving,dataDirEditing,cancelDirEdit,saveServerCfg,newServerUrl,addServer,removeServer,
+      ocrHealth,remoteHealth,checkHealth,serverCfg,cfgEdit,cfgSaving,dataDirEditing,cancelDirEdit,saveServerCfg,newServerUrl,addServer,removeServer,
     };
   }
 }).mount('#app');
