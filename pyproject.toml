@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "bill-extractor"
-version = "0.4.0"
+version = "0.5.0"
 description = "Extract structured expense data from receipt photos and PDFs using DocTR OCR + Qwen2.5 LLM"
 requires-python = ">=3.10"
 
@@ -13,6 +13,7 @@ dependencies = [
     "fastapi>=0.111.0",
     "uvicorn[standard]>=0.29.0",
     "python-multipart>=0.0.9",   # required by FastAPI for file uploads
+    "httpx>=0.27.0",             # async proxy to remote OCR server
 
     # OCR — DocTR with PyTorch backend (pypdfium2 enables PDF support)
     "python-doctr[torch]>=0.9.0",
@@ -30,13 +31,15 @@ dependencies = [
 # Developer tooling
 dev = [
     "pytest>=8.0",
-    "httpx>=0.27.0",   # required by FastAPI TestClient
+]
+# YAML config support (optional — JSON config works without this)
+yaml = [
+    "pyyaml>=6.0",
 ]
 
 [project.scripts]
 bill-extractor          = "bill_extractor.app:main"
 bill-extractor-download = "bill_extractor.download_models:download"
-bill-extractor-cli      = "bill_extractor.main:main"
 
 [tool.setuptools.packages.find]
 where = ["."]

@@ -1,6 +1,6 @@
 # Bill Extractor — Restructuring Plan
 
-> Status: draft · last updated 2026-03-25
+> Status: draft · last updated 2026-03-27
 > Branch: `dev`
 
 ---
@@ -106,16 +106,16 @@ Browser (single HTML file or static site)
 Existing CLI (`bill-extractor-cli`) continues to work unchanged.
 
 **Checklist:**
-- [ ] FastAPI app created with lifespan model loading
-- [ ] `POST /extract` accepts image and PDF, returns correct JSON schema
-- [ ] Request queue in place — concurrent requests serialised
-- [ ] CORS configured
-- [ ] All existing tests pass (`python -m pytest`)
-- [ ] New tests for the `/extract` endpoint (upload image → check response schema)
-- [ ] New tests for the `/extract` endpoint (upload PDF → check response schema)
-- [ ] CLI (`bill-extractor-cli`) still works unchanged
-- [ ] `flask` removed from dependencies, `fastapi` + `uvicorn` added to `pyproject.toml`
-- [ ] Commit: *"Phase 1 complete — FastAPI stateless extraction service"*
+- [x] FastAPI app created with lifespan model loading
+- [x] `POST /extract` accepts image and PDF, returns correct JSON schema
+- [x] Request queue in place — concurrent requests serialised
+- [x] CORS configured
+- [x] All existing tests pass (`python -m pytest`) — 128 passed
+- [x] New tests for the `/extract` endpoint (upload image → check response schema)
+- [x] New tests for the `/extract` endpoint (upload PDF → check response schema)
+- [x] CLI (`bill-extractor-cli`) still works unchanged
+- [x] `flask` removed from dependencies, `fastapi` + `uvicorn` added to `pyproject.toml`
+- [x] Commit: *"Phase 1 complete — FastAPI stateless extraction service"*
 
 ---
 
@@ -154,24 +154,191 @@ with all state in a user-chosen file via the File System Access API.
 - CORS-friendly: works from `file://`, `localhost`, and company intranet URL
 
 **Checklist:**
-- [ ] Vue + PrimeVue scaffolded, single `.html` file loads from CDN
-- [ ] Settings panel — server URL saved to `localStorage`
-- [ ] File System Access API — first-time setup, reopen on launch
-- [ ] `POST /extract` called from browser, result displayed
-- [ ] Thumbnail generated client-side (~10KB) and stored in history file
-- [ ] Raw OCR text stored in every record
-- [ ] Duplicate detection working (MD5 in browser)
-- [ ] History table with toggleable columns
-- [ ] Date range slider with month snapping and presets
-- [ ] Export CSV respects current date range
-- [ ] Manual correction and good/bad marking persisted to file
+- [x] Vue + PrimeVue scaffolded, single `.html` file loads from CDN
+- [x] Settings panel — server URL saved to `localStorage`
+- [x] File System Access API — first-time setup, reopen on launch
+- [x] `POST /extract` called from browser, result displayed
+- [x] Thumbnail generated client-side (~10KB) and stored in history file
+- [x] Raw OCR text stored in every record
+- [x] Duplicate detection working (MD5 in browser)
+- [x] History table with toggleable columns
+- [x] Date range slider with month snapping and presets
+- [x] Export CSV respects current date range
+- [x] Manual correction and good/bad marking persisted to file
 - [ ] Optional secondary file load (read-only overlay)
-- [ ] All existing backend tests still pass (`python -m pytest`)
+- [x] All existing backend tests still pass (`python -m pytest`) — 105 passed
 - [ ] Manual smoke test: upload image → result shown → appears in history → duplicate blocked
 - [ ] Manual smoke test: upload PDF → same flow
 - [ ] Manual smoke test: close and reopen browser → history intact
 - [ ] Manual smoke test: open in second browser → independent history
 - [ ] Commit: *"Phase 2 complete — Vue frontend with client-side history"*
+
+---
+
+### Phase 2.5 — Server-side history + unified process model
+
+**Goal:** eliminate browser-tied storage. History lives on the user's local disk,
+managed by the app server. Any browser works identically. CLI and web UI share
+the same history file automatically.
+
+**Why this supersedes the Phase 2 storage approach:**
+- IndexedDB and FSA are browser-specific — switching browsers loses all history
+- Export/import is an extra burden users should not need for routine use
+- Brave blocks `showDirectoryPicker`; `navigator.storage.estimate()` unreliable
+- A locally-running server already has full disk access — use it directly
+
+---
+
+#### Architecture
+
+One FastAPI process, two modes:
+
+```
+bill-extractor serve               (full local stack)
+├── POST /extract                  OCR + inference  (models loaded at startup)
+├── GET  /history                  returns all records as JSON
+├── POST /history                  append or update a record
+├── DELETE /history/{hash}         delete a record
+├── GET  /files/{hash}             serve original file from disk
+└── GET  /  (+ static)             serve the web UI
+
+bill-extractor serve --headless    (remote / GPU server)
+└── POST /extract                  OCR + inference only — no UI, no history
+```
+
+The browser always talks to the local app server on `localhost`. The local server
+either handles `/extract` with its own models, or proxies the request to a
+configured remote OCR server. The browser never needs a CORS exemption and
+never knows whether processing is local or remote.
+
+---
+
+#### Config file
+
+Auto-created on first run at `~/.bill_extractor/config.yaml`
+(JSON also accepted — detected by extension).
+
+```yaml
+history_file: ~/.bill_extractor/history.json
+files_dir:    ~/.bill_extractor/files/
+ocr_url:      null          # null = use local models; set to remote URL to proxy
+port:         8080
+```
+
+All paths expand `~`. `ocr_url` can also be set via `--ocr-url` flag on `serve`
+or overridden per-call with `--server` on `extract`.
+
+---
+
+#### OCR resolution order
+
+1. `ocr_url` configured and reachable → proxy request to remote server
+2. Remote unreachable → fall back to local models
+   - If models already loaded (no remote was configured at startup): immediate
+   - If models not yet loaded (remote was configured): lazy-load on first fallback
+     request; caller receives a 503 with `Retry-After: 15` while loading
+3. Neither available → 503 with clear error message
+
+**Model loading policy:**
+- `serve` with no `ocr_url` → load models at startup (slow start, ~10s, always ready)
+- `serve` with `ocr_url` set → skip model loading at startup (fast start, ~1s);
+  load lazily only if remote fails
+- `serve --headless` → always load models at startup
+
+---
+
+#### CLI interface
+
+```
+bill-extractor serve [--headless] [--port N] [--ocr-url URL]
+    Start the server. Without --headless: opens browser automatically.
+    --headless: OCR endpoint only, no UI or history routes.
+    --ocr-url: override ocr_url from config for this session.
+
+bill-extractor extract FILE [--server URL]
+    Extract a single file. No local server required.
+    --server: send directly to this URL.
+    Fallback: if --server unreachable, tries local server on default port.
+    Neither available: exits with error.
+
+bill-extractor stop
+    Graceful shutdown of local server (or Ctrl+C on serve).
+```
+
+---
+
+#### Privacy contract (important for --headless remote deployments)
+
+The server is stateless with respect to extracted content:
+- Receives file bytes → runs OCR + inference → returns JSON → discards everything
+- No file written to disk, no result cached, no history touched
+- This behaviour is unchanged from Phase 1 and is preserved in `--headless` mode
+
+**What the remote server sees** (from standard uvicorn access log):
+- HTTP method, endpoint path (`POST /extract`), status code, response time
+- Filename from the multipart `Content-Disposition` header
+- Filetype inferred from extension or MIME type
+- Timestamp of each request
+
+**What the remote server does NOT see:**
+- File contents, raw OCR text, extracted amounts, dates, vendor names, or any PII
+- History records — these are written only by the local app server, never sent remotely
+
+**Statistics derivable from logs (acceptable):**
+- Requests per day / busy hours
+- File type distribution (image vs PDF)
+- Error rate and latency
+
+---
+
+#### Web UI changes
+
+- Remove all IndexedDB / FSA / File System Access code (significant simplification)
+- Remove browser-side storage estimate — server can report disk usage directly
+- History reads/writes → `GET /history`, `POST /history`, `DELETE /history/{hash}`
+- Original file downloads → `GET /files/{hash}` (replaces IDB `files` store)
+- Settings panel: OCR server status indicator, external URL input, Start/Stop button
+- No setup wizard on first launch — server handles file creation
+
+**History record schema** (unchanged, now stored server-side as JSON):
+```json
+{
+  "hash": "...",
+  "filename": "...",
+  "filename_generated": "...",
+  "thumbnail": "<base64 jpeg, 800px>",
+  "ocr_text": ["..."],
+  "result": { ... },
+  "correction": "",
+  "action": "",
+  "timestamp": "...",
+  "original_file": "hash.ext"
+}
+```
+
+---
+
+#### Checklist
+
+- [x] Config loader: reads `~/.bill_extractor/config.{yaml,json}`, creates defaults on first run
+- [x] History endpoints: `GET /history`, `POST /history`, `DELETE /history/{hash}`
+- [x] File storage: save original on `POST /history`; serve on `GET /files/{hash}`
+- [x] Proxy + fallback: `POST /extract` proxies to `ocr_url` if set; falls back to local on failure
+- [x] Model loading policy: eager if no `ocr_url`; lazy otherwise; `--headless` always eager
+- [x] `serve --headless`: registers `/extract` only; skips UI/history routes
+- [x] `serve` (full): registers all routes; auto-opens browser on startup
+- [x] `extract --server URL`: direct call, no local server required; fallback to local
+- [x] Frontend: IDB/FSA code removed; history via API
+- [x] Frontend: OCR server status + external URL panel in Settings
+- [x] Frontend: disk usage reported by server (replaces `navigator.storage.estimate`)
+- [x] All existing tests pass (`python -m pytest`) — 157 passed
+- [x] New tests: history CRUD endpoints
+- [x] New tests: config loading and defaults
+- [ ] New tests: proxy + fallback behaviour (mock remote)
+- [ ] Manual smoke test: `serve` → browser opens → upload → history persists across browser restart
+- [ ] Manual smoke test: switch browsers → same history visible
+- [ ] Manual smoke test: `extract file.jpg` → record appears in web UI
+- [ ] Commit: *"Phase 2.5 complete — server-side history, unified process model"*
 
 ---
 
@@ -369,6 +536,32 @@ assembled dynamically from that configuration.
 ---
 
 ## Resolved decisions
+
+**OCR model — doctr is sufficient; GLM-OCR explored and set aside**
+
+GLM-OCR (zai-org/GLM-OCR, 0.9B vision-language model) was evaluated against
+all 15 sample receipts using Ollama as the local inference backend.
+Both OCR outputs were fed through the same Qwen2.5 extraction pipeline and
+the structured JSON results compared field by field.
+
+Findings:
+- 13/15 images: identical extraction output regardless of OCR backend
+- 1 regression (food_04, a hotel POS thermal slip): GLM-OCR drops the
+  receipt header entirely, causing mis-routing and empty extraction;
+  doctr handles it correctly
+- 1 minor difference (hotel_01 guest name, food_06 delivery time): marginal,
+  no practical impact on expense reporting
+
+GLM-OCR does produce cleaner OCR text on noisy receipts and correctly reads
+the ₹ symbol without the post-processing fix doctr requires. However these
+improvements do not translate into better field extraction — Qwen2.5 is
+robust enough to handle doctr's minor noise. GLM-OCR also adds latency
+(~4–5s/image on CPU via Ollama vs ~2s for doctr) and requires a separate
+inference server.
+
+Decision: keep doctr + Qwen2.5. Do not replace with a vision-language model
+at this stage. Revisit only if doctr accuracy becomes a real user-reported
+problem on a class of receipts it cannot handle.
 
 **Image thumbnails in history file** — yes, store as base64 in the JSON
 history file. Store a resized/compressed thumbnail (~10–15 KB, ~200×200px),

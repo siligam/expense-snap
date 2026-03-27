@@ -6,4 +6,4 @@ Run the web app with:  bill-extractor
 Download models first:  bill-extractor-download
 """
 
-__version__ = "0.4.0"
+__version__ = "0.5.0"

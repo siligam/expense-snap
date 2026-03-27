@@ -1,15 +1,17 @@
 """
-Tests for the FastAPI /extract endpoint.
+Tests for the FastAPI endpoints.
 
 Models are mocked — these tests cover the API layer (routing, validation,
 response schema) not the ML pipeline (tested in test_ocr_integration.py).
 """
 import io
+import json
 import pytest
 from unittest.mock import patch, MagicMock
 from fastapi.testclient import TestClient
 
 import bill_extractor.app as app_module
+from bill_extractor.history import HistoryStore
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -45,6 +47,21 @@ def client():
          patch("bill_extractor.app.ocr_process", return_value=MOCK_OCR_LINES):
         with TestClient(app_module.app, raise_server_exceptions=True) as c:
             yield c
+
+
+@pytest.fixture()
+def full_client(tmp_path):
+    """Full-stack TestClient with mocked models and a temp HistoryStore."""
+    mock_extractor = MagicMock()
+    mock_extractor.extract.return_value = MOCK_FOOD_RESULT
+    store = HistoryStore(tmp_path / "history.json", tmp_path / "files")
+
+    with patch.object(app_module, "_extractor", mock_extractor), \
+         patch.object(app_module, "_semaphore", __import__("asyncio").Semaphore(1)), \
+         patch.object(app_module, "_store", store), \
+         patch("bill_extractor.app.ocr_process", return_value=MOCK_OCR_LINES):
+        with TestClient(app_module.app, raise_server_exceptions=True) as c:
+            yield c, store
 
 
 def _jpeg_bytes() -> bytes:
@@ -185,3 +202,155 @@ def test_extract_empty_file_returns_400(client):
         files={"file": ("receipt.jpg", io.BytesIO(b""), "image/jpeg")},
     )
     assert resp.status_code == 400
+
+
+# ---------------------------------------------------------------------------
+# History endpoints
+# ---------------------------------------------------------------------------
+
+def test_history_get_empty(full_client):
+    c, _ = full_client
+    resp = c.get("/history")
+    assert resp.status_code == 200
+    assert resp.json() == []
+
+
+def test_history_post_record(full_client):
+    c, store = full_client
+    rec = {"hash": "test1", "filename": "r.jpg", "category": "food"}
+    resp = c.post("/history", data={"record": json.dumps(rec)})
+    assert resp.status_code == 200
+    assert resp.json()["hash"] == "test1"
+    assert len(store.all()) == 1
+
+
+def test_history_post_with_file(full_client):
+    c, store = full_client
+    rec = {"hash": "withfile", "filename": "r.jpg"}
+    resp = c.post(
+        "/history",
+        data={"record": json.dumps(rec)},
+        files={"file": ("r.jpg", io.BytesIO(_jpeg_bytes()), "image/jpeg")},
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data.get("original_file") == "withfile.jpg"
+    assert store.get_file_path("withfile.jpg") is not None
+
+
+def test_history_get_returns_records(full_client):
+    c, store = full_client
+    store.upsert({"hash": "h_get", "x": 1})
+    resp = c.get("/history")
+    assert resp.status_code == 200
+    hashes = [r["hash"] for r in resp.json()]
+    assert "h_get" in hashes
+
+
+def test_history_delete_existing(full_client):
+    c, store = full_client
+    store.upsert({"hash": "h_del"})
+    resp = c.delete("/history/h_del")
+    assert resp.status_code == 200
+    assert store.get("h_del") is None
+
+
+def test_history_delete_missing(full_client):
+    c, _ = full_client
+    resp = c.delete("/history/no_such_hash")
+    assert resp.status_code == 404
+
+
+def test_history_delete_removes_file(full_client):
+    c, store = full_client
+    store.upsert({"hash": "h_with_file", "original_file": "h_with_file.jpg"})
+    store.save_file("h_with_file.jpg", b"data")
+    c.delete("/history/h_with_file")
+    assert store.get_file_path("h_with_file.jpg") is None
+
+
+def test_history_post_invalid_json_returns_422(full_client):
+    c, _ = full_client
+    resp = c.post("/history", data={"record": "not json"})
+    assert resp.status_code == 422
+
+
+# ---------------------------------------------------------------------------
+# Storage endpoint
+# ---------------------------------------------------------------------------
+
+def test_storage_returns_byte_counts(full_client):
+    c, store = full_client
+    store.upsert({"hash": "s1"})
+    resp = c.get("/storage")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "history_bytes" in data
+    assert "files_bytes" in data
+    assert "total_bytes" in data
+    assert data["total_bytes"] >= 0
+
+
+# ---------------------------------------------------------------------------
+# File serving
+# ---------------------------------------------------------------------------
+
+def test_get_file_returns_content(full_client):
+    c, store = full_client
+    store.save_file("serve_me.jpg", _jpeg_bytes())
+    resp = c.get("/files/serve_me.jpg")
+    assert resp.status_code == 200
+    assert resp.content == _jpeg_bytes()
+
+
+def test_get_file_missing_returns_404(full_client):
+    c, _ = full_client
+    resp = c.get("/files/ghost.jpg")
+    assert resp.status_code == 404
+
+
+def test_get_file_path_traversal_rejected(full_client):
+    c, _ = full_client
+    resp = c.get("/files/../secret.txt")
+    # FastAPI will reject or reroute; either 400 or 404 is acceptable
+    assert resp.status_code in (400, 404)
+
+
+# ---------------------------------------------------------------------------
+# Config endpoints
+# ---------------------------------------------------------------------------
+
+def test_get_config_returns_fields(full_client):
+    c, _ = full_client
+    import bill_extractor.app as am
+    import bill_extractor.config as cfg_mod
+    mock_cfg = cfg_mod.Config()
+    import unittest.mock as mock
+    with mock.patch.object(am, "_config", mock_cfg):
+        resp = c.get("/config")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "history_file" in data
+    assert "files_dir" in data
+    assert "ocr_url" in data
+    assert "port" in data
+
+
+def test_patch_config_ocr_url(full_client):
+    c, _ = full_client
+    import bill_extractor.app as am
+    import bill_extractor.config as cfg_mod
+    mock_cfg = cfg_mod.Config()
+    import unittest.mock as mock
+    with mock.patch.object(am, "_config", mock_cfg):
+        resp = c.patch("/config", json={"ocr_url": "http://gpu:8080"})
+        assert resp.status_code == 200
+        assert mock_cfg.ocr_url == "http://gpu:8080"
+        resp2 = c.patch("/config", json={"ocr_url": None})
+        assert mock_cfg.ocr_url is None
+
+
+def test_patch_config_unknown_field_rejected(full_client):
+    c, _ = full_client
+    resp = c.patch("/config", json={"history_file": "/tmp/evil.json"})
+    assert resp.status_code == 422

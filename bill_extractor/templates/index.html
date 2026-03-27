@@ -4,1594 +4,1460 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Bill Extractor</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" />
-  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet" />
+  <link rel="icon" href="/favicon.ico" type="image/svg+xml" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" />
+  <link rel="stylesheet" href="https://unpkg.com/primeicons@6.0.1/primeicons.css" />
+  <script src="https://unpkg.com/vue@3.4.21/dist/vue.global.prod.js"></script>
+  <script src="https://unpkg.com/spark-md5@3.0.2/spark-md5.min.js"></script>
+  <script src="https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
+
   <style>
     *, *::before, *::after { box-sizing: border-box; }
+    body { margin: 0; background: #f1f5f9; font-family: 'Inter', sans-serif; font-size: 14px; color: #1e293b; }
 
-    :root {
-      --navy:   #1e293b;
-      --navy2:  #0f172a;
-      --blue:   #2563eb;
-      --blue-l: #eff6ff;
-      --green:  #16a34a;
-      --red:    #dc2626;
-      --amber:  #d97706;
-      --purple: #7c3aed;
-      --bg:     #f1f5f9;
-      --card:   #ffffff;
-      --border: #e2e8f0;
-      --muted:  #64748b;
-      --mono:   'IBM Plex Mono', monospace;
-      --sans:   'IBM Plex Sans', sans-serif;
+    /* ── Buttons ─────────────────────────────────── */
+    .btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      border-radius: 6px; font-family: 'Inter', sans-serif; font-size: 0.82rem; font-weight: 500;
+      padding: 7px 14px; cursor: pointer; border: 1px solid transparent;
+      transition: background 0.15s, border-color 0.15s, color 0.15s;
+      white-space: nowrap; line-height: 1;
     }
+    .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+    .btn-primary   { background: #3b82f6; color: #fff; border-color: #3b82f6; }
+    .btn-primary:hover:not(:disabled) { background: #2563eb; border-color: #2563eb; }
+    .btn-secondary { background: #fff; color: #374151; border-color: #d1d5db; }
+    .btn-secondary:hover:not(:disabled) { border-color: #3b82f6; color: #3b82f6; }
+    .btn-success   { background: #fff; color: #16a34a; border-color: #86efac; }
+    .btn-success:hover:not(:disabled) { background: #f0fdf4; }
+    .btn-danger    { background: #fff; color: #dc2626; border-color: #fca5a5; }
+    .btn-danger:hover:not(:disabled) { background: #fff5f5; }
+    .btn-ghost     { background: transparent; color: #64748b; border-color: transparent; }
+    .btn-ghost:hover:not(:disabled) { background: #f1f5f9; color: #374151; }
+    .btn-lg        { padding: 10px 20px; font-size: 0.9rem; }
+    .btn-sm        { padding: 4px 10px; font-size: 0.75rem; }
+    .btn-icon      { padding: 6px; border-radius: 50%; }
+    .btn-block     { width: 100%; justify-content: center; }
 
-    body {
-      background: var(--bg);
-      font-family: var(--sans);
-      font-size: 14px;
-      color: #1e293b;
-      min-height: 100vh;
+    /* ── Form controls ───────────────────────────── */
+    .form-input, .form-select, .form-textarea {
+      width: 100%; border: 1px solid #d1d5db; border-radius: 6px;
+      font-family: 'Inter', sans-serif; font-size: 0.85rem; color: #1e293b;
+      background: #fff; padding: 7px 10px; line-height: 1.4;
+      transition: border-color 0.15s;
     }
+    .form-input:focus, .form-select:focus, .form-textarea:focus {
+      outline: none; border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59,130,246,0.12);
+    }
+    .form-textarea { resize: vertical; }
+    .form-label { display: block; font-size: 0.72rem; font-weight: 600; text-transform: uppercase;
+                  letter-spacing: 0.05em; color: #64748b; margin-bottom: 5px; }
 
-    /* ── Navbar ── */
-    .topbar {
-      background: var(--navy);
-      padding: 0 1.5rem;
-      height: 54px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      position: sticky;
-      top: 0;
-      z-index: 100;
-      border-bottom: 1px solid rgba(255,255,255,0.06);
-    }
-    .topbar-brand {
-      display: flex;
-      align-items: center;
-      gap: 0.6rem;
-      color: #fff;
-      font-weight: 700;
-      font-size: 1rem;
-      letter-spacing: 0.3px;
-    }
-    .topbar-brand .icon-wrap {
-      width: 28px; height: 28px;
-      background: var(--blue);
-      border-radius: 6px;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 0.8rem;
-    }
-    .topbar-brand span { color: #93c5fd; }
+    /* ── Checkbox ───────────────────────────────── */
+    .cb-label { display: flex; align-items: center; gap: 7px; cursor: pointer; font-size: 0.85rem; user-select: none; }
+    .cb-label input[type=checkbox] { accent-color: #3b82f6; width: 15px; height: 15px; cursor: pointer; }
+    .rb-label { display: flex; align-items: center; gap: 7px; cursor: pointer; font-size: 0.85rem; user-select: none; }
+    .rb-label input[type=radio] { accent-color: #3b82f6; width: 15px; height: 15px; cursor: pointer; }
 
-    .btn-reset {
-      background: transparent;
-      border: 1px solid rgba(255,255,255,0.2);
-      color: rgba(255,255,255,0.75);
-      font-size: 0.78rem;
-      padding: 5px 14px;
-      border-radius: 6px;
-      cursor: pointer;
-      display: flex; align-items: center; gap: 6px;
-      transition: all 0.15s;
+    /* ── Header ─────────────────────────────────── */
+    .header {
+      background: #1e293b; color: #fff; height: 52px;
+      display: flex; align-items: center; gap: 8px; padding: 0 1.25rem;
+      position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 6px rgba(0,0,0,0.2);
     }
-    .btn-reset:hover { background: rgba(220,38,38,0.15); border-color: rgba(220,38,38,0.5); color: #fca5a5; }
+    .header-brand { font-weight: 700; font-size: 1rem; letter-spacing: 0.3px; }
+    .header-brand span { color: #93c5fd; }
+    .header-right { margin-left: auto; display: flex; gap: 4px; }
 
-    /* ── Tabs ── */
-    .tab-bar {
-      background: var(--navy2);
-      padding: 0 1.5rem;
-      display: flex;
-      gap: 0;
-      border-bottom: 1px solid rgba(255,255,255,0.06);
+    /* ── Tab bar ────────────────────────────────── */
+    .tabbar { background: #0f172a; display: flex; padding: 0 1.25rem; border-bottom: 1px solid rgba(255,255,255,0.06); }
+    .tab {
+      background: none; border: none; font-family: 'Inter', sans-serif; cursor: pointer;
+      color: rgba(255,255,255,0.45); font-size: 0.8rem; font-weight: 500;
+      padding: 10px 16px; position: relative; transition: color 0.15s;
     }
-    .tab-btn {
-      background: none;
-      border: none;
-      color: rgba(255,255,255,0.45);
-      font-family: var(--sans);
-      font-size: 0.8rem;
-      font-weight: 500;
-      padding: 10px 18px;
-      cursor: pointer;
-      position: relative;
-      transition: color 0.15s;
-      letter-spacing: 0.3px;
-    }
-    .tab-btn::after {
-      content: '';
-      position: absolute;
-      bottom: 0; left: 18px; right: 18px;
-      height: 2px;
-      background: var(--blue);
-      transform: scaleX(0);
-      transition: transform 0.2s;
+    .tab::after {
+      content: ''; position: absolute; bottom: 0; left: 16px; right: 16px;
+      height: 2px; background: #3b82f6; transform: scaleX(0); transition: transform 0.2s;
       border-radius: 2px 2px 0 0;
     }
-    .tab-btn.active { color: #fff; }
-    .tab-btn.active::after { transform: scaleX(1); }
-    .tab-btn .tab-count {
-      background: rgba(255,255,255,0.12);
-      border-radius: 10px;
-      padding: 1px 7px;
-      font-size: 0.68rem;
-      margin-left: 5px;
+    .tab.active { color: #fff; }
+    .tab.active::after { transform: scaleX(1); }
+    .tab-badge {
+      background: rgba(255,255,255,0.12); border-radius: 10px;
+      padding: 1px 7px; font-size: 0.68rem; margin-left: 5px;
     }
-    .tab-btn.active .tab-count { background: var(--blue); }
+    .tab.active .tab-badge { background: #3b82f6; }
 
-    /* ── Tab content ── */
-    .tab-pane { display: none; }
-    .tab-pane.active { display: block; }
+    /* ── Main content ───────────────────────────── */
+    .main { padding: 1.25rem; max-width: 1280px; margin: 0 auto; }
 
-    /* ── Drop zone ── */
-    .page-pad { padding: 1.5rem; }
-
-    #dropZone {
-      border: 1.5px dashed #94a3b8;
-      border-radius: 12px;
-      padding: 2rem;
-      text-align: center;
-      background: var(--card);
-      cursor: pointer;
-      transition: border-color 0.2s, background 0.2s, box-shadow 0.2s;
-      position: relative;
-      overflow: hidden;
+    /* ── Cards ──────────────────────────────────── */
+    .card {
+      background: #fff; border: 1px solid #e2e8f0; border-radius: 9px;
+      padding: 1.25rem; box-shadow: 0 1px 3px rgba(0,0,0,0.06);
     }
-    #dropZone::before {
-      content: '';
-      position: absolute;
-      inset: 0;
-      background: linear-gradient(135deg, #eff6ff 0%, transparent 60%);
-      opacity: 0;
-      transition: opacity 0.2s;
-    }
-    #dropZone:hover { border-color: var(--blue); }
-    #dropZone:hover::before { opacity: 1; }
-    .drop-icon { font-size: 2rem; color: #94a3b8; display: block; margin-bottom: 0.5rem; }
-    .drop-text { color: var(--muted); font-size: 0.88rem; margin: 0; }
-    .drop-text strong { color: var(--navy); }
 
-    /* ── Full-page drag overlay ── */
-    #dragOverlay {
-      display: none;
-      position: fixed; inset: 0;
-      background: rgba(15,23,42,0.85);
-      backdrop-filter: blur(4px);
-      z-index: 9000;
-      align-items: center;
-      justify-content: center;
-      flex-direction: column;
-      gap: 1rem;
+    /* ── Overlays ───────────────────────────────── */
+    .overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.5);
+      display: flex; align-items: center; justify-content: center; z-index: 9000;
+    }
+    .overlay-card {
+      background: #fff; border-radius: 12px; padding: 2.5rem 2rem;
+      max-width: 440px; width: 94%; text-align: center;
+      box-shadow: 0 16px 40px rgba(0,0,0,0.2);
+    }
+    .overlay-card h2 { margin: 0.5rem 0 0.75rem; font-size: 1.2rem; }
+    .overlay-card p  { color: #64748b; font-size: 0.88rem; line-height: 1.7; margin: 0 0 1.5rem; }
+    .overlay-card .note { font-size: 0.75rem; color: #94a3b8; margin-top: 1rem; }
+
+    /* Processing spinner */
+    .proc-overlay {
+      position: fixed; inset: 0; background: rgba(255,255,255,0.82);
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      z-index: 8000; gap: 1rem;
+    }
+    .spinner {
+      width: 44px; height: 44px; border: 3px solid #e2e8f0;
+      border-top-color: #3b82f6; border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+    @keyframes spin  { to { transform: rotate(360deg); } }
+    @keyframes pulse { 0%,100% { opacity:1; transform:scale(1); } 50% { opacity:0.7; transform:scale(1.1); } }
+
+    /* Lightbox */
+    .lightbox {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.9);
+      display: flex; align-items: center; justify-content: center; z-index: 9999; cursor: zoom-out;
+    }
+    .lightbox img { max-width: 88vw; max-height: 88vh; border-radius: 8px; cursor: default; }
+    .lb-close {
+      position: fixed; top: 1rem; right: 1.5rem; cursor: pointer;
+      color: rgba(255,255,255,0.6); font-size: 1.8rem; line-height: 1;
+      transition: color 0.15s;
+    }
+    .lb-close:hover { color: #fff; }
+
+    /* Dialog */
+    .dialog-backdrop {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.45);
+      display: flex; align-items: center; justify-content: center; z-index: 8500;
+    }
+    .dialog {
+      background: #fff; border-radius: 10px; width: 420px; max-width: 95vw;
+      box-shadow: 0 20px 50px rgba(0,0,0,0.2);
+    }
+    .dialog-header {
+      padding: 1rem 1.25rem; border-bottom: 1px solid #e2e8f0;
+      font-weight: 600; display: flex; align-items: center; justify-content: space-between;
+    }
+    .dialog-body   { padding: 1.25rem; }
+    .dialog-footer { padding: 0.75rem 1.25rem; border-top: 1px solid #e2e8f0; display: flex; justify-content: flex-end; gap: 0.5rem; }
+
+    /* Toast */
+    .toast {
+      position: fixed; bottom: 1.25rem; right: 1.25rem; z-index: 9998;
+      padding: 10px 16px; border-radius: 8px; font-size: 0.82rem; font-weight: 500;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15); max-width: 300px;
+      opacity: 0; transform: translateY(10px); transition: opacity 0.2s, transform 0.2s;
       pointer-events: none;
     }
-    #dragOverlay.show { display: flex; }
-    #dragOverlay .ol-icon {
-      width: 80px; height: 80px;
-      border: 2px dashed rgba(255,255,255,0.5);
-      border-radius: 50%;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 2rem; color: rgba(255,255,255,0.7);
-      animation: pulseRing 1.2s ease-in-out infinite;
-    }
-    @keyframes pulseRing {
-      0%, 100% { transform: scale(1); opacity: 1; }
-      50% { transform: scale(1.08); opacity: 0.7; }
-    }
-    #dragOverlay p { color: rgba(255,255,255,0.85); font-size: 1.1rem; font-weight: 500; margin: 0; }
+    .toast.show    { opacity: 1; transform: translateY(0); }
+    .toast.info    { background: #1e293b; color: #fff; }
+    .toast.success { background: #16a34a; color: #fff; }
+    .toast.warn    { background: #d97706; color: #fff; }
+    .toast.error   { background: #dc2626; color: #fff; }
 
-    /* ── Results ── */
-    .results-wrap { margin-top: 1.25rem; }
-
-    .col-header {
-      display: grid;
-      grid-template-columns: 150px minmax(150px,0.8fr) 1fr 200px;
-      background: #f8fafc;
-      border: 1px solid var(--border);
-      border-radius: 8px 8px 0 0;
-      overflow: hidden;
+    /* ── Drop zone ──────────────────────────────── */
+    .drop-zone {
+      border: 2px dashed #94a3b8; border-radius: 10px; background: #fff;
+      padding: 2.5rem 1.5rem; text-align: center; cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
     }
-    .col-header > div {
-      padding: 8px 12px;
-      font-size: 0.7rem;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.6px;
-      color: var(--muted);
-      border-right: 1px solid var(--border);
-    }
-    .col-header > div:last-child { border-right: none; }
+    .drop-zone:hover, .drop-zone.drag-over { border-color: #3b82f6; background: #eff6ff; }
+    .drop-icon { font-size: 2rem; color: #94a3b8; display: block; margin-bottom: 0.5rem; transition: color 0.2s; }
+    .drop-zone:hover .drop-icon, .drop-zone.drag-over .drop-icon { color: #3b82f6; }
 
-    .result-rows { border: 1px solid var(--border); border-top: none; border-radius: 0 0 8px 8px; overflow: hidden; }
-
-    .result-row {
-      display: grid;
-      grid-template-columns: 150px minmax(150px,0.8fr) 1fr 200px;
-      border-bottom: 1px solid var(--border);
-      background: var(--card);
-      transition: background 0.1s;
+    /* ── Duplicate banner ───────────────────────── */
+    .dup-banner {
+      background: #fefce8; border: 1px solid #fde047; border-radius: 7px;
+      padding: 0.7rem 1rem; margin-bottom: 1rem;
+      display: flex; align-items: center; gap: 0.5rem; font-size: 0.88rem; color: #713f12;
     }
-    .result-row:last-child { border-bottom: none; }
-    .result-row:hover { background: #fafcff; }
+    .dup-banner a { color: #2563eb; cursor: pointer; text-decoration: underline; }
 
-    .result-row > .rc {
-      padding: 12px;
-      border-right: 1px solid var(--border);
-    }
-    .result-row > .rc:last-child { border-right: none; }
+    /* ── Result fields ──────────────────────────── */
+    .fl { font-size: 0.68rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; margin-bottom: 3px; }
+    .fv { font-size: 0.92rem; font-weight: 500; color: #1e293b; }
+    .fv-amount { font-size: 1.3rem; font-weight: 700; color: #16a34a; }
 
-    /* Spinner row */
-    .row-spinner {
-      display: flex; align-items: center; gap: 10px;
-      padding: 14px 12px;
-      background: var(--card);
-      border-bottom: 1px solid var(--border);
-      color: var(--muted);
-      font-size: 0.85rem;
-    }
-    .row-spinner:last-child { border-bottom: none; }
-
-    /* Error row */
-    .row-error {
-      padding: 12px;
-      background: #fff5f5;
-      border-bottom: 1px solid var(--border);
-      color: var(--red);
-      font-size: 0.82rem;
-      display: flex; align-items: center; gap: 8px;
-    }
-
-    /* ── Image col ── */
-    .thumb-img {
-      width: 126px; height: 100px;
-      object-fit: cover;
-      border-radius: 6px;
-      cursor: zoom-in;
-      border: 1px solid var(--border);
-      display: block;
-      transition: opacity 0.15s;
-    }
-    .thumb-img:hover { opacity: 0.88; }
-    .thumb-name { font-size: 0.68rem; color: var(--muted); margin-top: 5px; word-break: break-all; max-width: 126px; line-height: 1.3; }
-    .src-badge {
-      font-size: 0.63rem; font-weight: 700; padding: 2px 7px;
-      border-radius: 20px; display: inline-block; margin-top: 4px;
-      text-transform: uppercase; letter-spacing: 0.3px;
-    }
-    .src-new      { background: #dcfce7; color: #166534; }
-    .src-cache    { background: #dbeafe; color: #1e40af; }
-    .src-history  { background: #ede9fe; color: #5b21b6; }
-
-    /* ── Fields col ── */
     .cat-pill {
-      display: inline-flex; align-items: center; gap: 5px;
-      font-size: 0.72rem; font-weight: 700;
-      padding: 3px 10px; border-radius: 20px; margin-bottom: 8px;
-      text-transform: uppercase; letter-spacing: 0.4px;
+      display: inline-flex; align-items: center; gap: 4px;
+      font-size: 0.72rem; font-weight: 700; padding: 3px 10px;
+      border-radius: 20px; text-transform: uppercase; letter-spacing: 0.4px;
     }
     .cat-food   { background: #fef9c3; color: #854d0e; }
     .cat-travel { background: #e0f2fe; color: #0c4a6e; }
     .cat-hotel  { background: #fce7f3; color: #831843; }
     .cat-other  { background: #f1f5f9; color: #475569; }
 
-    .kv-table { width: 100%; border-collapse: collapse; }
-    .kv-table tr td { padding: 2px 0; vertical-align: top; }
-    .kv-table .kv-key {
-      font-size: 0.72rem; color: var(--muted); font-weight: 500;
-      width: 44%; padding-right: 8px; white-space: nowrap;
+    /* Thumbnail */
+    .thumb { width: 80px; height: 80px; object-fit: cover; border-radius: 6px; border: 1px solid #e2e8f0; cursor: zoom-in; }
+    .thumb-ph {
+      width: 80px; height: 80px; background: #f1f5f9; border-radius: 6px; border: 1px solid #e2e8f0;
+      display: flex; align-items: center; justify-content: center; color: #94a3b8; font-size: 1.6rem;
     }
-    .kv-table .kv-val {
-      font-size: 0.8rem; font-weight: 600; color: var(--navy);
+    .ht  { width: 42px; height: 42px; object-fit: cover; border-radius: 4px; border: 1px solid #e2e8f0; cursor: zoom-in; display: block; }
+    .ht-ph {
+      width: 42px; height: 42px; background: #f1f5f9; border-radius: 4px; border: 1px solid #e2e8f0;
+      display: flex; align-items: center; justify-content: center; color: #94a3b8;
     }
 
-    /* ── Plain text col (editable) ── */
-    .plain-ta {
-      width: 100%; min-height: 140px;
-      font-family: var(--mono); font-size: 0.72rem;
-      line-height: 1.7; color: #334155;
-      background: #f8fafc; border: 1px solid var(--border);
-      border-radius: 6px; padding: 8px 10px;
-      resize: vertical; transition: border-color 0.15s, background 0.15s;
+    /* Status badges */
+    .badge-good { background: #dcfce7; color: #166534; padding: 2px 9px; border-radius: 12px; font-size: 0.72rem; font-weight: 600; }
+    .badge-bad  { background: #fee2e2; color: #991b1b; padding: 2px 9px; border-radius: 12px; font-size: 0.72rem; font-weight: 600; }
+    .badge-none { background: #f1f5f9; color: #475569; padding: 2px 9px; border-radius: 12px; font-size: 0.72rem; font-weight: 600; }
+
+    /* ── Date slider ────────────────────────────── */
+    .slider-wrap { position: relative; height: 28px; margin: 10px 0; cursor: pointer; }
+    .slider-track { position: absolute; top: 50%; transform: translateY(-50%); left: 0; right: 0; height: 4px; background: #e2e8f0; border-radius: 2px; }
+    .slider-fill  { position: absolute; top: 50%; transform: translateY(-50%); height: 4px; background: #3b82f6; border-radius: 2px; }
+    .slider-thumb {
+      position: absolute; top: 50%; width: 18px; height: 18px;
+      background: #fff; border: 2px solid #3b82f6; border-radius: 50%;
+      transform: translate(-50%, -50%); cursor: grab; z-index: 2;
+      transition: box-shadow 0.15s;
     }
-    .plain-ta:focus { outline: none; border-color: var(--blue); background: #fff; }
-    .plain-ta.edited { background: #fffbeb; border-color: var(--amber); }
-    .plain-actions { display: flex; gap: 5px; margin-top: 6px; flex-wrap: wrap; }
-    .btn-save-plain {
-      background: var(--blue); color: #fff; border: none;
-      border-radius: 5px; font-size: 0.68rem; font-weight: 600;
-      padding: 3px 10px; cursor: pointer; font-family: var(--sans);
+    .slider-thumb:hover, .slider-thumb:active { box-shadow: 0 0 0 5px rgba(59,130,246,0.2); cursor: grabbing; }
+    .range-inputs { display: flex; gap: 1rem; }
+    input[type=range] {
+      -webkit-appearance: none; appearance: none; width: 100%; height: 4px;
+      background: transparent; outline: none; cursor: pointer;
+    }
+    input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none; width: 16px; height: 16px;
+      background: #fff; border: 2px solid #3b82f6; border-radius: 50%; cursor: pointer;
+    }
+
+    /* ── History table ──────────────────────────── */
+    .hist-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+    .hist-table thead th {
+      padding: 8px 12px; background: #f8fafc; text-align: left;
+      font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;
+      color: #64748b; border-bottom: 2px solid #e2e8f0; white-space: nowrap;
+    }
+    .hist-table thead th.col-sortable { cursor: pointer; user-select: none; }
+    .hist-table thead th.col-sortable:hover { color: #3b82f6; background: #eff6ff; }
+    .hist-table thead th.col-sorted { color: #3b82f6; }
+    .hist-table thead th.th-drag-over { border-bottom: 2px solid #3b82f6; background: #eff6ff; }
+    .hist-table tbody tr { border-bottom: 1px solid #f1f5f9; transition: background 0.1s; }
+    .hist-table tbody tr:last-child { border-bottom: none; }
+    .hist-table tbody tr:hover { background: #f8fafc; }
+    .hist-table td { padding: 8px 12px; vertical-align: middle; }
+
+    .ocr-cell {
+      font-size: 0.7rem; color: #64748b; white-space: pre-wrap; word-break: break-all;
+      max-height: 90px; overflow-y: auto; background: #f8fafc; padding: 4px 6px;
+      border-radius: 4px; line-height: 1.5;
+    }
+
+    /* Column chip toggles */
+    .col-chip {
       display: inline-flex; align-items: center; gap: 4px;
-      transition: background 0.15s;
+      border: 1px solid #e2e8f0; border-radius: 20px; cursor: pointer;
+      font-size: 0.72rem; font-weight: 600; padding: 3px 10px; color: #64748b;
+      background: #f8fafc; transition: all 0.15s; font-family: 'Inter', sans-serif;
     }
-    .btn-save-plain:hover { background: #1d4ed8; }
-    .btn-save-plain.saved { background: var(--green); }
-    .btn-undo-plain {
-      background: none; border: 1px solid var(--border);
-      border-radius: 5px; font-size: 0.68rem; color: var(--muted);
-      padding: 3px 10px; cursor: pointer; font-family: var(--sans);
-      display: inline-flex; align-items: center; gap: 4px;
-      transition: all 0.15s;
-    }
-    .btn-undo-plain:hover { border-color: var(--amber); color: var(--amber); }
-    .btn-copy {
-      background: none; border: 1px solid var(--border);
-      border-radius: 5px; font-size: 0.68rem; color: var(--muted);
-      padding: 3px 9px; cursor: pointer; font-family: var(--sans);
-      transition: all 0.15s; display: inline-flex; align-items: center; gap: 4px;
-    }
-    .btn-copy:hover { background: var(--blue); color: #fff; border-color: var(--blue); }
-    .btn-copy.copied { background: var(--green); color: #fff; border-color: var(--green); }
+    .col-chip:hover { border-color: #3b82f6; color: #3b82f6; }
+    .col-chip.on    { background: #1e293b; border-color: #1e293b; color: #fff; }
+    .col-chip.drag-over { border-color: #3b82f6; border-style: dashed; background: #eff6ff; color: #3b82f6; }
 
-    /* ── Actions col ── */
-    .action-col { display: flex; flex-direction: column; gap: 6px; }
-    .action-ts { font-size: 0.63rem; color: #94a3b8; font-family: var(--mono); }
-    .edited-badge {
-      display: inline-flex; align-items: center; gap: 4px;
-      font-size: 0.65rem; font-weight: 700;
-      padding: 2px 8px; border-radius: 20px;
-      background: #fef3c7; color: #92400e;
-      text-transform: uppercase; letter-spacing: 0.3px;
-    }
+    /* Preset buttons */
+    .preset { border: 1px solid #e2e8f0; border-radius: 5px; cursor: pointer; background: #f8fafc;
+              font-size: 0.75rem; font-weight: 600; padding: 3px 10px; color: #64748b;
+              transition: all 0.15s; font-family: 'Inter', sans-serif; }
+    .preset:hover { border-color: #3b82f6; color: #3b82f6; }
+    .preset.active { background: #3b82f6; border-color: #3b82f6; color: #fff; }
 
-    /* ── Empty state ── */
-    #emptyState {
-      text-align: center; padding: 4rem 1rem;
-      color: #94a3b8;
-    }
-    #emptyState .empty-icon {
-      font-size: 3rem; margin-bottom: 1rem; opacity: 0.35;
-    }
-    #emptyState p { font-size: 0.9rem; }
+    /* Pagination */
+    .pagination { display: flex; align-items: center; justify-content: center; gap: 4px; padding: 0.75rem 1rem; border-top: 1px solid #f1f5f9; }
+    .page-btn { width: 28px; height: 28px; border-radius: 5px; border: 1px solid #e2e8f0; background: #fff;
+                cursor: pointer; font-size: 0.78rem; color: #374151; font-family: 'Inter', sans-serif; }
+    .page-btn:hover:not(:disabled) { border-color: #3b82f6; color: #3b82f6; }
+    .page-btn.active { background: #3b82f6; border-color: #3b82f6; color: #fff; }
+    .page-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
-    /* ── History tab ── */
-    .hist-session {
-      margin-bottom: 1.5rem;
-    }
-    .hist-session-label {
-      display: flex; align-items: center; gap: 10px;
-      padding: 10px 14px;
-      background: var(--navy);
-      color: rgba(255,255,255,0.85);
-      border-radius: 8px 8px 0 0;
-      font-size: 0.78rem; font-weight: 600;
-      cursor: pointer;
-      user-select: none;
-    }
-    .hist-session-label .hs-meta { color: rgba(255,255,255,0.45); font-size: 0.72rem; font-weight: 400; margin-left: auto; }
-    .hist-session-label .hs-chevron { color: rgba(255,255,255,0.4); transition: transform 0.2s; }
-    .hist-session-label.collapsed .hs-chevron { transform: rotate(-90deg); }
-    .hist-session-body { display: block; }
-    .hist-session-body.hidden { display: none; }
+    /* Empty state */
+    .empty-state { text-align: center; padding: 4rem 1rem; color: #94a3b8; }
+    .empty-state .ei { font-size: 2.5rem; display: block; margin-bottom: 0.75rem; opacity: 0.4; }
 
-    .thumb-date { font-size: 0.63rem; color: #94a3b8; margin-top: 4px; font-family: var(--mono); line-height: 1.4; }
+    /* Settings grid */
+    .settings-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+    @media (max-width: 560px) { .settings-grid { grid-template-columns: 1fr; } }
 
-    .btn-delete {
-      border: 1px solid #fecaca; border-radius: 6px;
-      background: #fff5f5; color: #991b1b;
-      font-size: 0.75rem; font-weight: 500;
-      padding: 5px 10px; cursor: pointer;
-      display: flex; align-items: center; gap: 5px;
-      transition: all 0.15s; font-family: var(--sans); width: 100%;
-    }
-    .btn-delete:hover { background: var(--red); color: #fff; border-color: var(--red); }
-    .btn-delete:disabled { opacity: 0.5; cursor: not-allowed; }
-
-    .hist-toolbar {
-      display: flex; align-items: center; justify-content: space-between;
-      margin-bottom: 1rem; padding: 0.5rem 0;
-    }
-    .hist-total { font-size: 0.82rem; color: var(--muted); font-weight: 500; }
-    .btn-clear-hist {
-      background: none; border: 1px solid #fecaca;
-      color: #991b1b; border-radius: 6px;
-      font-size: 0.75rem; padding: 4px 12px; cursor: pointer;
-      font-family: var(--sans); transition: all 0.15s;
-      display: flex; align-items: center; gap: 5px;
-    }
-    .btn-clear-hist:hover:not(:disabled) { background: var(--red); color: #fff; border-color: var(--red); }
-    .btn-clear-hist:disabled { opacity: 0.4; cursor: not-allowed; }
-
-    .hist-empty { text-align: center; padding: 3rem; color: #94a3b8; font-size: 0.88rem; }
-
-    /* ── Filter panel ── */
-    .filter-toggle {
-      background: var(--card); border: 1px solid var(--border);
-      border-radius: 6px; font-size: 0.75rem; font-weight: 500;
-      color: var(--muted); padding: 4px 12px; cursor: pointer;
-      font-family: var(--sans); display: inline-flex; align-items: center; gap: 6px;
-      transition: all 0.15s;
-    }
-    .filter-toggle:hover { border-color: var(--blue); color: var(--blue); }
-    .filter-toggle.active { background: var(--blue); border-color: var(--blue); color: #fff; }
-    .filter-badge {
-      background: #fff3; border-radius: 10px;
-      padding: 1px 6px; font-size: 0.65rem; font-weight: 700;
-    }
-    .filter-panel {
-      display: none;
-      background: var(--card); border: 1px solid var(--border);
-      border-radius: 8px; padding: 14px 16px;
-      margin-bottom: 1rem;
-      gap: 14px; flex-wrap: wrap; align-items: flex-end;
-    }
-    .filter-panel.open { display: flex; }
-    .filter-group { display: flex; flex-direction: column; gap: 4px; }
-    .filter-group label {
-      font-size: 0.68rem; font-weight: 700; color: var(--muted);
-      text-transform: uppercase; letter-spacing: 0.4px;
-    }
-    .filter-input {
-      border: 1px solid var(--border); border-radius: 5px;
-      font-size: 0.78rem; padding: 4px 8px; font-family: var(--sans);
-      color: var(--navy); background: #f8fafc;
-      height: 30px;
-    }
-    .filter-input:focus { outline: none; border-color: var(--blue); background: #fff; }
-    .filter-cat-row { display: flex; gap: 5px; flex-wrap: wrap; }
-    .btn-filter-cat {
-      border: 1px solid var(--border); border-radius: 20px;
-      background: var(--card); color: var(--muted);
-      font-size: 0.72rem; font-weight: 600; padding: 3px 11px;
-      cursor: pointer; font-family: var(--sans); transition: all 0.15s;
-    }
-    .btn-filter-cat:hover { border-color: var(--blue); color: var(--blue); }
-    .btn-filter-cat.on { background: var(--navy); border-color: var(--navy); color: #fff; }
-    .filter-amount-row { display: flex; gap: 5px; align-items: center; }
-    .filter-select {
-      border: 1px solid var(--border); border-radius: 5px;
-      font-size: 0.78rem; padding: 4px 6px; font-family: var(--sans);
-      color: var(--navy); background: #f8fafc; height: 30px; cursor: pointer;
-    }
-    .filter-select:focus { outline: none; border-color: var(--blue); }
-    .btn-clear-filter {
-      background: none; border: 1px solid var(--border); border-radius: 5px;
-      color: var(--muted); font-size: 0.72rem; padding: 4px 10px;
-      cursor: pointer; font-family: var(--sans); transition: all 0.15s;
-      display: inline-flex; align-items: center; gap: 4px; height: 30px;
-    }
-    .btn-clear-filter:hover { background: #fee2e2; border-color: #fca5a5; color: var(--red); }
-    .filter-result-count {
-      font-size: 0.72rem; color: var(--muted); font-style: italic; margin-left: auto;
-    }
-
-    /* ── Sort bar ── */
-    .sort-bar {
-      display: flex; align-items: center; gap: 8px;
-      margin-bottom: 1rem; flex-wrap: wrap;
-    }
-    .sort-label { font-size: 0.75rem; color: var(--muted); font-weight: 600; margin-right: 2px; }
-    .btn-sort {
-      background: var(--card); border: 1px solid var(--border);
-      border-radius: 6px; font-size: 0.75rem; font-weight: 500;
-      color: var(--muted); padding: 4px 12px; cursor: pointer;
-      font-family: var(--sans); display: inline-flex; align-items: center; gap: 5px;
-      transition: all 0.15s;
-    }
-    .btn-sort:hover { border-color: var(--blue); color: var(--blue); }
-    .btn-sort.active { background: var(--blue); border-color: var(--blue); color: #fff; }
-    .btn-sort .sort-arrow { font-size: 0.65rem; opacity: 0.8; }
-
-    /* ── Lightbox ── */
-    #lightbox {
-      display: none;
-      position: fixed; inset: 0;
-      background: rgba(0,0,0,0.9);
-      z-index: 9999;
-      align-items: center;
-      justify-content: center;
-    }
-    #lightbox.show { display: flex; }
-    #lightbox img {
-      max-width: 88vw; max-height: 88vh;
-      border-radius: 8px;
-      box-shadow: 0 30px 60px rgba(0,0,0,0.5);
-      cursor: default;
-    }
-    #lightbox .lb-close {
-      position: fixed; top: 1.2rem; right: 1.5rem;
-      color: rgba(255,255,255,0.7); font-size: 1.8rem;
-      cursor: pointer; z-index: 10000;
-      transition: color 0.15s;
-    }
-    #lightbox .lb-close:hover { color: #fff; }
-
-    /* ── Toast ── */
-    #toast {
-      position: fixed; bottom: 1.25rem; right: 1.25rem;
-      padding: 10px 18px;
-      border-radius: 8px;
-      font-size: 0.82rem;
-      font-weight: 500;
-      z-index: 10001;
-      opacity: 0;
-      transform: translateY(12px);
-      transition: opacity 0.2s, transform 0.2s;
-      pointer-events: none;
-      max-width: 280px;
-    }
-    #toast.show { opacity: 1; transform: translateY(0); }
-    #toast.t-info    { background: var(--navy);  color: #fff; }
-    #toast.t-success { background: var(--green); color: #fff; }
-    #toast.t-error   { background: var(--red);   color: #fff; }
-
-    /* ── Summary table ── */
-    .summary-wrap {
-      margin-top: 1.25rem;
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      overflow: hidden;
-    }
-    .summary-header {
-      display: flex; align-items: center; justify-content: space-between;
-      padding: 10px 14px;
-      background: #f8fafc;
-      border-bottom: 1px solid var(--border);
-    }
-    .summary-title {
-      font-size: 0.78rem; font-weight: 700; color: var(--navy);
-      text-transform: uppercase; letter-spacing: 0.5px;
-      display: flex; align-items: center; gap: 6px;
-    }
-    .summary-actions { display: flex; align-items: center; gap: 8px; }
-    .summary-sel-count { font-size: 0.72rem; color: var(--muted); }
-    .btn-export {
-      background: var(--blue); color: #fff; border: none;
-      border-radius: 6px; font-size: 0.78rem; font-weight: 600;
-      padding: 5px 14px; cursor: pointer; font-family: var(--sans);
-      display: inline-flex; align-items: center; gap: 6px;
-      transition: background 0.15s;
-    }
-    .btn-export:hover:not(:disabled) { background: #1d4ed8; }
-    .btn-export:disabled { opacity: 0.45; cursor: not-allowed; }
-    .summary-table {
-      width: 100%; border-collapse: collapse;
-      font-size: 0.8rem;
-    }
-    .summary-table thead th {
-      padding: 7px 12px; background: #f8fafc;
-      text-align: left; font-size: 0.68rem; font-weight: 700;
-      text-transform: uppercase; letter-spacing: 0.5px;
-      color: var(--muted); border-bottom: 1px solid var(--border);
-    }
-    .summary-table tbody tr {
-      border-bottom: 1px solid var(--border);
-      transition: background 0.1s;
-    }
-    .summary-table tbody tr:last-child { border-bottom: none; }
-    .summary-table tbody tr:hover { background: #fafcff; }
-    .summary-table td {
-      padding: 7px 12px; vertical-align: middle;
-    }
-    .summary-table td.sum-filename {
-      font-family: var(--mono); font-size: 0.72rem; color: var(--navy);
-      word-break: break-all; max-width: 240px;
-    }
-    .summary-table td.sum-cat {
-      font-weight: 600; font-size: 0.75rem;
-    }
-    .summary-table td.sum-amount {
-      font-weight: 700; color: var(--green); text-align: right;
-    }
+    /* Flex gap helpers */
+    .g1 { gap: 4px; } .g2 { gap: 8px; } .g3 { gap: 12px; } .g4 { gap: 16px; }
+    .flex { display: flex; } .flex-wrap { flex-wrap: wrap; } .items-center { align-items: center; }
+    .justify-between { justify-content: space-between; }
+    .mb1 { margin-bottom: 0.5rem; } .mb2 { margin-bottom: 1rem; } .mb3 { margin-bottom: 1.25rem; }
+    .mt1 { margin-top: 0.5rem; } .mt2 { margin-top: 1rem; } .mt3 { margin-top: 1.25rem; }
+    .sec-label { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: #64748b; margin: 1.25rem 0 0.5rem; }
+    .w-full { width: 100%; } .flex-1 { flex: 1; }
+    .text-muted { color: #64748b; } .text-sm { font-size: 0.82rem; }
   </style>
 </head>
 <body>
+<div id="app">
 
-<!-- Topbar -->
-<div class="topbar">
-  <div class="topbar-brand">
-    <div class="icon-wrap"><i class="fa-solid fa-receipt"></i></div>
-    Bill <span>Extractor</span>
-  </div>
-  <button class="btn-reset" onclick="resetSession()">
-    <i class="fa-solid fa-rotate-left"></i> Reset
-  </button>
-</div>
 
-<!-- Tab bar -->
-<div class="tab-bar">
-  <button class="tab-btn active" id="tab-current-btn" onclick="switchTab('current')">
-    Current Session
-    <span class="tab-count" id="tab-current-count">0</span>
-  </button>
-  <button class="tab-btn" id="tab-history-btn" onclick="switchTab('history')">
-    History
-    <span class="tab-count" id="tab-history-count">—</span>
-  </button>
-</div>
 
-<!-- Current session tab -->
-<div class="tab-pane active page-pad" id="tab-current">
-
-  <!-- Drop zone -->
-  <div id="dropZone" onclick="document.getElementById('fileInput').click()">
-    <i class="fa-solid fa-cloud-arrow-up drop-icon"></i>
-    <p class="drop-text"><strong>Drag &amp; drop</strong> bill images anywhere — or click to browse</p>
-    <p class="drop-text" style="margin-top:4px;font-size:0.78rem;">JPEG, PNG, WEBP, PDF · Multiple files supported</p>
-    <input type="file" id="fileInput" accept="image/*,.pdf" multiple style="display:none" onchange="handleFileInput(this)" />
-  </div>
-
-  <!-- Results -->
-  <div class="results-wrap" id="resultsWrap" style="display:none;">
-    <div class="col-header">
-      <div><i class="fa-regular fa-image me-1"></i> Image</div>
-      <div><i class="fa-solid fa-table-list me-1"></i> Extracted Fields</div>
-      <div><i class="fa-solid fa-align-left me-1"></i> Plain Text</div>
-      <div><i class="fa-solid fa-check-double me-1"></i> Actions</div>
+  <!-- ── GLOBAL DRAG OVERLAY ── -->
+  <div v-if="globalDragging" style="position:fixed;inset:0;background:rgba(15,23,42,0.85);backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;z-index:7000;pointer-events:none">
+    <div style="text-align:center;color:#fff">
+      <i class="pi pi-cloud-upload" style="font-size:3rem;display:block;margin-bottom:0.75rem;animation:pulse 1s ease-in-out infinite"></i>
+      <p style="margin:0;font-size:1.1rem;font-weight:500">Drop to process</p>
+      <p style="margin:4px 0 0;font-size:0.82rem;color:rgba(255,255,255,0.6)">JPEG · PNG · WebP · PDF</p>
     </div>
-    <div class="result-rows" id="resultsBody"></div>
   </div>
 
-  <!-- Summary table -->
-  <div class="summary-wrap" id="summaryWrap" style="display:none;">
-    <div class="summary-header">
-      <div class="summary-title">
-        <i class="fa-solid fa-table-list"></i> Summary
-      </div>
-      <div class="summary-actions">
-        <span class="summary-sel-count" id="summarySelCount"></span>
-        <button class="btn-export" id="btnExport" onclick="exportSelected()" disabled>
-          <i class="fa-solid fa-file-zipper"></i> Export Selected
-        </button>
-      </div>
-    </div>
-    <table class="summary-table">
-      <thead>
-        <tr>
-          <th style="width:36px;text-align:center;">
-            <input type="checkbox" id="selectAll" onchange="toggleSelectAll(this)" title="Select all">
-          </th>
-          <th>Filename</th>
-          <th>Date</th>
-          <th>Category</th>
-          <th style="text-align:right;">Amount</th>
-        </tr>
-      </thead>
-      <tbody id="summaryBody"></tbody>
-    </table>
+  <!-- ── LIGHTBOX ── -->
+  <div class="lightbox" v-if="lightboxSrc" @click="lightboxSrc=''">
+    <span class="lb-close pi pi-times" @click.stop="lightboxSrc=''"></span>
+    <img :src="lightboxSrc" @click.stop />
   </div>
 
-  <!-- Empty -->
-  <div id="emptyState">
-    <div class="empty-icon"><i class="fa-regular fa-file-image"></i></div>
-    <p>Drop one or more bill images to extract structured data.</p>
-  </div>
-
-</div>
-
-<!-- History tab -->
-<div class="tab-pane page-pad" id="tab-history">
-  <div id="historyBody"><p class="hist-empty">Loading…</p></div>
-</div>
-
-<!-- Full-page drag overlay -->
-<div id="dragOverlay">
-  <div class="ol-icon"><i class="fa-solid fa-cloud-arrow-up"></i></div>
-  <p>Drop images to process</p>
-</div>
-
-<!-- Lightbox -->
-<div id="lightbox" onclick="closeLightbox()">
-  <span class="lb-close" onclick="closeLightbox()"><i class="fa-solid fa-xmark"></i></span>
-  <img id="lightboxImg" src="" alt="" onclick="event.stopPropagation()" />
-</div>
-
-<!-- Toast -->
-<div id="toast"></div>
-
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-<script>
-// ─────────────────────────────────────────────────────────────
-// Constants
-// ─────────────────────────────────────────────────────────────
-const CAT_ICONS   = { food:'🍽️', travel:'✈️', hotel:'🏨', other:'📄' };
-const CAT_CLASSES = { food:'cat-food', travel:'cat-travel', hotel:'cat-hotel' };
-const CURR_SYMS   = { INR:'₹', USD:'$', EUR:'€', GBP:'£' };
-const SRC_LABEL   = { new:'New', cache:'Cached', history:'From History' };
-const SRC_CLASS   = { new:'src-new', cache:'src-cache', history:'src-history' };
-
-let rowIdx = 0;
-let _dragHideTimer = null;
-
-// ─────────────────────────────────────────────────────────────
-// Init
-// ─────────────────────────────────────────────────────────────
-window.addEventListener('DOMContentLoaded', async () => {
-  const items = await fetch('/api/cache').then(r => r.json()).catch(() => []);
-  if (Array.isArray(items) && items.length) {
-    items.forEach(item => addRow({ ...item, source: item.source || 'cache' }));
-  }
-  updateTabCount();
-});
-
-// ─────────────────────────────────────────────────────────────
-// Tabs
-// ─────────────────────────────────────────────────────────────
-function switchTab(name) {
-  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-  document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
-  document.getElementById(`tab-${name}-btn`).classList.add('active');
-  document.getElementById(`tab-${name}`).classList.add('active');
-  if (name === 'history') loadHistory();
-}
-
-function updateTabCount() {
-  const n = document.getElementById('resultsBody').children.length;
-  document.getElementById('tab-current-count').textContent = n;
-}
-
-// ─────────────────────────────────────────────────────────────
-// Drag-and-drop (anywhere on page)
-// ─────────────────────────────────────────────────────────────
-const overlay = document.getElementById('dragOverlay');
-
-// dragover fires continuously while dragging — use it to show the overlay
-// and schedule hiding it (drop fires before the timer expires)
-document.addEventListener('dragover', e => {
-  e.preventDefault();               // required: allows drop to fire
-  if (!e.dataTransfer.types.includes('Files')) return;
-  overlay.classList.add('show');
-  clearTimeout(_dragHideTimer);
-  _dragHideTimer = setTimeout(() => overlay.classList.remove('show'), 150);
-});
-
-document.addEventListener('drop', e => {
-  e.preventDefault();               // stop browser from opening the file
-  clearTimeout(_dragHideTimer);
-  overlay.classList.remove('show');
-  const files = [...e.dataTransfer.files].filter(f => f.type.startsWith('image/') || f.type === 'application/pdf');
-  if (files.length) handleFiles(files);
-});
-
-// dragleave only fires when cursor leaves the browser window entirely
-document.addEventListener('dragleave', e => {
-  if (e.relatedTarget === null) {   // truly left the window
-    clearTimeout(_dragHideTimer);
-    overlay.classList.remove('show');
-  }
-});
-
-function handleFileInput(input) {
-  handleFiles([...input.files]);
-  input.value = '';
-}
-
-async function handleFiles(files) {
-  const supported = files.filter(f => f.type.startsWith('image/') || f.type === 'application/pdf');
-  if (!supported.length) { showToast('No supported files found (JPEG, PNG, WEBP, PDF)', 'error'); return; }
-  for (const f of supported) await processFile(f);
-}
-
-// ─────────────────────────────────────────────────────────────
-// Processing
-// ─────────────────────────────────────────────────────────────
-async function processFile(file) {
-  const id = `r${++rowIdx}`;
-  addSpinner(id, file.name);
-
-  const fd = new FormData();
-  fd.append('image', file);
-  try {
-    const res  = await fetch('/api/process', { method: 'POST', body: fd });
-    const data = await res.json();
-    if (data.error) throw new Error(data.error);
-    replaceSpinner(id, data);
-    if (data.source !== 'new') showToast(`Found existing result for ${file.name}`, 'info');
-  } catch (err) {
-    replaceSpinnerError(id, file.name, err.message);
-  }
-  updateTabCount();
-}
-
-// ─────────────────────────────────────────────────────────────
-// DOM helpers
-// ─────────────────────────────────────────────────────────────
-function showResultsArea() {
-  document.getElementById('resultsWrap').style.display = '';
-  document.getElementById('emptyState').style.display  = 'none';
-}
-
-function addSpinner(id, name) {
-  showResultsArea();
-  const el = document.createElement('div');
-  el.id = id; el.className = 'row-spinner';
-  el.innerHTML = `<div class="spinner-border spinner-border-sm text-primary" role="status"></div>
-    <span>Processing <strong>${esc(name)}</strong>…</span>`;
-  document.getElementById('resultsBody').appendChild(el);
-  el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-}
-
-function replaceSpinner(id, data) {
-  const el = document.getElementById(id);
-  if (!el) return;
-  el.outerHTML = buildRow(id, data);
-  addSummaryRow(id, data);
-}
-
-function replaceSpinnerError(id, name, msg) {
-  const el = document.getElementById(id);
-  if (!el) return;
-  el.outerHTML = `<div id="${id}" class="row-error">
-    <i class="fa-solid fa-circle-exclamation"></i>
-    <span><strong>${esc(name)}</strong> — ${esc(msg)}</span>
-  </div>`;
-}
-
-function addRow(data) {
-  showResultsArea();
-  const id = `r${++rowIdx}`;
-  document.getElementById('resultsBody').insertAdjacentHTML('beforeend', buildRow(id, data));
-  addSummaryRow(id, data);
-  updateTabCount();
-}
-
-// ─────────────────────────────────────────────────────────────
-// Row builder
-// ─────────────────────────────────────────────────────────────
-function buildRow(id, data, opts = {}) {
-  const src    = data.source || 'new';
-  const result = data.result || {};
-  const hash   = data.hash   || '';
-  const plain  = data.correction || toPlainText(result);
-
-  // Col 1 — image or PDF preview
-  const genName  = data.filename_generated || '';
-  const origName = data.filename || '';
-  const isPdf    = (data.image_url || '').toLowerCase().endsWith('.pdf');
-  const thumbHtml = isPdf
-    ? `<a href="${esc(data.image_url)}" target="_blank" class="thumb-img" style="display:flex;align-items:center;justify-content:center;background:#1e293b;text-decoration:none;cursor:pointer;">
-         <i class="fa-solid fa-file-pdf" style="font-size:3rem;color:#f87171;"></i>
-       </a>`
-    : `<img src="${esc(data.image_url)}" class="thumb-img"
-           alt="${esc(origName)}"
-           onclick="openLightbox('${esc(data.image_url)}')" />`;
-  const c1 = `
-    <div class="rc">
-      ${thumbHtml}
-      <div class="thumb-name">${esc(genName || origName)}</div>
-      ${genName && genName !== origName
-        ? `<div class="thumb-name" style="color:#94a3b8;font-size:0.62rem;font-style:italic;">${esc(origName)}</div>`
-        : ''}
-      <span class="src-badge ${SRC_CLASS[src] || 'src-new'}">${SRC_LABEL[src] || src}</span>
-      <div class="thumb-date"><i class="fa-regular fa-clock"></i> ${fmtDate(data.timestamp)}</div>
-    </div>`;
-
-  // Col 2 — rendered fields
-  const c2 = `<div class="rc">${renderFields(result)}</div>`;
-
-  // Col 3 — editable plain text
-  const c3 = `
-    <div class="rc">
-      <textarea class="plain-ta" id="${id}-plain"
-                data-orig="${esc(plain)}"
-                oninput="onPlainInput('${id}')">${esc(plain)}</textarea>
-      <div class="plain-actions">
-        <button class="btn-save-plain" id="${id}-save" onclick="savePlainEdit('${id}','${esc(hash)}')">
-          <i class="fa-solid fa-floppy-disk"></i> Save
-        </button>
-        <button class="btn-undo-plain" onclick="undoPlainEdit('${id}')">
-          <i class="fa-solid fa-rotate-left"></i> Undo
-        </button>
-        <button class="btn-copy" id="${id}-copy" onclick="copyPlain('${id}')">
-          <i class="fa-regular fa-copy"></i> Copy
-        </button>
+  <!-- ── EDIT DIALOG ── -->
+  <div class="dialog-backdrop" v-if="editVisible">
+    <div class="dialog">
+      <div class="dialog-header">
+        Edit record
+        <button class="btn btn-ghost btn-icon" @click="editVisible=false"><i class="pi pi-times"></i></button>
       </div>
-    </div>`;
-
-  // Col 4 — actions
-  const editedBadge = data.correction
-    ? '<span class="edited-badge">✍ Edited</span>' : '';
-
-  const c4 = opts.historyMode ? `
-    <div class="rc">
-      <div class="action-col">
-        ${editedBadge}
-        <div class="action-ts">${fmtDate(data.timestamp)}</div>
-        <button class="btn-delete" onclick="deleteHistoryItem('${esc(hash)}', this)">
-          <i class="fa-solid fa-trash"></i> Delete
-        </button>
-      </div>
-    </div>` : `
-    <div class="rc">
-      <div class="action-col">
-        ${editedBadge}
-        <div class="action-ts" id="${id}-edited-wrap">${editedBadge ? '' : ''}</div>
-        <div class="action-ts">${fmtDate(data.timestamp)}</div>
-        <button class="btn-delete" onclick="deleteSessionItem('${esc(hash)}', this)">
-          <i class="fa-solid fa-trash"></i> Delete
-        </button>
-      </div>
-    </div>`;
-
-  return `<div id="${id}" class="result-row">${c1}${c2}${c3}${c4}</div>`;
-}
-
-// ─────────────────────────────────────────────────────────────
-// Field renderers
-// ─────────────────────────────────────────────────────────────
-function renderFields(result) {
-  if (!result || !Object.keys(result).length)
-    return '<span style="color:var(--muted);font-size:0.8rem;">No data</span>';
-
-  const cat  = (result.category || 'other').toLowerCase();
-  const icon = CAT_ICONS[cat] || CAT_ICONS.other;
-  const cls  = CAT_CLASSES[cat] || 'cat-other';
-  const curr = result.currency ? (CURR_SYMS[result.currency] || result.currency) : null;
-
-  let html = `<span class="cat-pill ${cls}">${icon} ${cap(cat)}</span>
-    <table class="kv-table">`;
-
-  for (const [k, v] of Object.entries(result)) {
-    if (k === 'category') continue;
-    const label = k.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-    let   val   = String(v ?? '');
-    // Only add currency symbol if currency field is present in this result
-    if (curr && (k === 'amount' || k === 'total_amount')) val = `${curr}${val}`;
-    html += `<tr><td class="kv-key">${esc(label)}</td><td class="kv-val">${esc(val)}</td></tr>`;
-  }
-  html += '</table>';
-  return html;
-}
-
-function toPlainText(result) {
-  if (!result || !Object.keys(result).length) return '(no data)';
-  return Object.entries(result)
-    .map(([k, v]) => `${k.replace(/_/g,' ').replace(/\b\w/g, c=>c.toUpperCase())}: ${v ?? ''}`)
-    .join('\n');
-}
-
-// ─────────────────────────────────────────────────────────────
-// Plain text editing
-// ─────────────────────────────────────────────────────────────
-function onPlainInput(id) {
-  const ta   = document.getElementById(`${id}-plain`);
-  const save = document.getElementById(`${id}-save`);
-  if (!ta || !save) return;
-  const changed = ta.value !== ta.dataset.orig;
-  ta.classList.toggle('edited', changed);
-}
-
-async function savePlainEdit(id, hash) {
-  const ta   = document.getElementById(`${id}-plain`);
-  const save = document.getElementById(`${id}-save`);
-  if (!ta) return;
-  const text = ta.value;
-  ta.dataset.orig = text;           // update baseline so Undo goes to saved value
-  ta.classList.remove('edited');
-  if (save) {
-    save.classList.add('saved');
-    save.innerHTML = '<i class="fa-solid fa-check"></i> Saved';
-    setTimeout(() => {
-      save.classList.remove('saved');
-      save.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Save';
-    }, 2000);
-  }
-  updateSummaryRow(id, text);
-  if (hash) {
-    await fetch(`/api/item/${hash}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ correction: text })
-    }).catch(() => {});
-  }
-}
-
-function undoPlainEdit(id) {
-  const ta = document.getElementById(`${id}-plain`);
-  if (!ta) return;
-  ta.value = ta.dataset.orig;
-  ta.classList.remove('edited');
-}
-
-function copyPlain(id) {
-  const text = document.getElementById(`${id}-plain`)?.value || '';
-  navigator.clipboard.writeText(text).then(() => {
-    const btn = document.getElementById(`${id}-copy`);
-    btn.classList.add('copied');
-    btn.innerHTML = '<i class="fa-solid fa-check"></i> Copied!';
-    setTimeout(() => {
-      btn.classList.remove('copied');
-      btn.innerHTML = '<i class="fa-regular fa-copy"></i> Copy';
-    }, 2000);
-  });
-}
-
-// ─────────────────────────────────────────────────────────────
-// Lightbox
-// ─────────────────────────────────────────────────────────────
-function openLightbox(url) {
-  document.getElementById('lightboxImg').src = url;
-  document.getElementById('lightbox').classList.add('show');
-}
-function closeLightbox() {
-  document.getElementById('lightbox').classList.remove('show');
-}
-document.addEventListener('keydown', e => { if (e.key === 'Escape') closeLightbox(); });
-
-// ─────────────────────────────────────────────────────────────
-// History
-// ─────────────────────────────────────────────────────────────
-let _histItems      = [];   // master copy
-let _histSortBy     = 'date';
-let _histSortDir    = 'desc';
-let _histFilterOpen = false;
-let _histFilter     = { dateFrom: '', dateTo: '', category: '', amountOp: '', amountVal: '' };
-
-async function loadHistory() {
-  document.getElementById('historyBody').innerHTML = '<p class="hist-empty">Loading…</p>';
-  try {
-    _histItems = await fetch('/api/history').then(r => r.json());
-    renderHistoryTab(_histItems);
-    document.getElementById('tab-history-count').textContent = _histItems.length;
-  } catch {
-    document.getElementById('historyBody').innerHTML =
-      '<p class="hist-empty" style="color:var(--red)">Failed to load history.</p>';
-  }
-}
-
-// Parse the extracted date field into a timestamp for sorting.
-// Falls back to the entry's added timestamp when year is absent.
-function _parseSortDate(item) {
-  const raw = (item.result || {}).date || '';
-  const fallback = new Date(item.timestamp || 0).getTime();
-
-  // DD/MM/YYYY or DD/MM/YY
-  let m = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
-  if (m) {
-    let [, d, mo, y] = m;
-    if (y.length === 2) y = '20' + y;
-    const dt = new Date(`${y}-${mo.padStart(2,'0')}-${d.padStart(2,'0')}`);
-    if (!isNaN(dt)) return dt.getTime();
-  }
-  // DD Mon (no year) — use year from fallback timestamp
-  m = raw.match(/^(\d{1,2})\s+([A-Za-z]{3,})$/);
-  if (m) {
-    const year = new Date(fallback).getFullYear();
-    const dt = new Date(`${m[1]} ${m[2]} ${year}`);
-    if (!isNaN(dt)) return dt.getTime();
-  }
-  return fallback;
-}
-
-function _sortedHistory(items) {
-  return [...items].sort((a, b) => {
-    let cmp = 0;
-    if (_histSortBy === 'date') {
-      cmp = _parseSortDate(a) - _parseSortDate(b);
-    } else if (_histSortBy === 'category') {
-      const ca = (a.result || {}).category || '';
-      const cb = (b.result || {}).category || '';
-      cmp = ca.localeCompare(cb);
-    }
-    return _histSortDir === 'asc' ? cmp : -cmp;
-  });
-}
-
-function _getItemAmount(item) {
-  const r = item.result || {};
-  const raw = r.total_amount ?? r.amount ?? null;
-  if (raw === null) return null;
-  const n = parseFloat(String(raw).replace(/[^\d.]/g, ''));
-  return isNaN(n) ? null : n;
-}
-
-function _activeFilterCount() {
-  const f = _histFilter;
-  return [f.dateFrom, f.dateTo, f.category, f.amountVal].filter(Boolean).length;
-}
-
-function _applyFilters(items) {
-  const f = _histFilter;
-  return items.filter(item => {
-    // Category
-    if (f.category) {
-      const cat = (item.result || {}).category || '';
-      if (cat.toLowerCase() !== f.category) return false;
-    }
-    // Date range
-    const ts = _parseSortDate(item);
-    if (f.dateFrom) {
-      const from = new Date(f.dateFrom).getTime();
-      if (!isNaN(from) && ts < from) return false;
-    }
-    if (f.dateTo) {
-      // include the whole "to" day
-      const to = new Date(f.dateTo).getTime() + 86400000 - 1;
-      if (!isNaN(to) && ts > to) return false;
-    }
-    // Amount
-    if (f.amountVal !== '' && f.amountOp) {
-      const threshold = parseFloat(f.amountVal);
-      const amt = _getItemAmount(item);
-      if (!isNaN(threshold) && amt !== null) {
-        if (f.amountOp === 'gte' && amt < threshold) return false;
-        if (f.amountOp === 'lte' && amt > threshold) return false;
-      }
-    }
-    return true;
-  });
-}
-
-function _filteredAndSorted() {
-  return _sortedHistory(_applyFilters(_histItems));
-}
-
-function toggleFilterPanel() {
-  _histFilterOpen = !_histFilterOpen;
-  renderHistoryTab(_histItems);
-}
-
-function setHistFilterCat(cat) {
-  _histFilter.category = _histFilter.category === cat ? '' : cat;
-  renderHistoryTab(_histItems);
-}
-
-function onFilterChange() {
-  _histFilter.dateFrom  = document.getElementById('hf-date-from')?.value  || '';
-  _histFilter.dateTo    = document.getElementById('hf-date-to')?.value    || '';
-  _histFilter.amountOp  = document.getElementById('hf-amount-op')?.value  || '';
-  _histFilter.amountVal = document.getElementById('hf-amount-val')?.value || '';
-  // Only re-render the rows — do NOT touch the filter panel (would kill focus)
-  _updateHistoryRows();
-}
-
-function clearFilters() {
-  _histFilter = { dateFrom: '', dateTo: '', category: '', amountOp: '', amountVal: '' };
-  renderHistoryTab(_histItems);  // full re-render is fine for a button click
-}
-
-function setHistSort(by) {
-  if (_histSortBy === by) {
-    _histSortDir = _histSortDir === 'asc' ? 'desc' : 'asc';
-  } else {
-    _histSortBy  = by;
-    _histSortDir = 'desc';
-  }
-  renderHistoryTab(_histItems);
-}
-
-function _updateHistoryRows() {
-  const wrap   = document.getElementById('hist-rows-wrap');
-  if (!wrap) return;
-  const fCount   = _activeFilterCount();
-  const filtered = _filteredAndSorted();
-
-  // Update the "X of Y shown" span without touching the filter panel
-  const countEl = document.getElementById('hist-filter-count');
-  if (countEl) countEl.textContent = fCount ? `${filtered.length} of ${_histItems.length} shown` : '';
-
-  // Update clear-filters button visibility
-  const clearBtn = document.getElementById('hist-clear-filter-btn');
-  if (clearBtn) clearBtn.style.display = fCount ? '' : 'none';
-
-  if (!filtered.length) {
-    wrap.innerHTML = '<p class="hist-empty">No entries match the current filters.</p>';
-    return;
-  }
-  wrap.innerHTML = `
-    <div class="col-header">
-      <div><i class="fa-regular fa-image me-1"></i> Image</div>
-      <div><i class="fa-solid fa-table-list me-1"></i> Extracted Fields</div>
-      <div><i class="fa-solid fa-align-left me-1"></i> Plain Text</div>
-      <div><i class="fa-solid fa-trash me-1"></i> Actions</div>
-    </div>
-    <div class="result-rows" id="historyRows">
-      ${filtered.map(item => buildRow(`h${++rowIdx}`, { ...item, source: 'history' }, { historyMode: true })).join('')}
-    </div>`;
-  _buildHistorySummary(filtered);
-}
-
-function renderHistoryTab(items) {
-  const body   = document.getElementById('historyBody');
-  const f      = _histFilter;
-  const fCount = _activeFilterCount();
-
-  const dirIcon = _histSortDir === 'asc'
-    ? '<i class="fa-solid fa-arrow-up sort-arrow"></i>'
-    : '<i class="fa-solid fa-arrow-down sort-arrow"></i>';
-
-  const sortBar = `
-    <div class="sort-bar">
-      <span class="sort-label"><i class="fa-solid fa-arrow-up-wide-short me-1"></i>Sort:</span>
-      <button class="btn-sort ${_histSortBy === 'date'     ? 'active' : ''}" onclick="setHistSort('date')">
-        <i class="fa-regular fa-calendar"></i> Date ${_histSortBy === 'date' ? dirIcon : ''}
-      </button>
-      <button class="btn-sort ${_histSortBy === 'category' ? 'active' : ''}" onclick="setHistSort('category')">
-        <i class="fa-solid fa-tag"></i> Category ${_histSortBy === 'category' ? dirIcon : ''}
-      </button>
-      <button class="filter-toggle ${_histFilterOpen || fCount ? 'active' : ''}" onclick="toggleFilterPanel()">
-        <i class="fa-solid fa-filter"></i> Filter
-        ${fCount ? `<span class="filter-badge">${fCount}</span>` : ''}
-      </button>
-      <span id="hist-filter-count" class="filter-result-count"></span>
-    </div>`;
-
-  const cats = ['food','travel','hotel'];
-  const filterPanel = `
-    <div class="filter-panel ${_histFilterOpen ? 'open' : ''}">
-      <div class="filter-group">
-        <label><i class="fa-regular fa-calendar me-1"></i>Date From</label>
-        <input type="date" class="filter-input" id="hf-date-from"
-               value="${f.dateFrom}" onchange="onFilterChange()" />
-      </div>
-      <div class="filter-group">
-        <label><i class="fa-regular fa-calendar me-1"></i>Date To</label>
-        <input type="date" class="filter-input" id="hf-date-to"
-               value="${f.dateTo}" onchange="onFilterChange()" />
-      </div>
-      <div class="filter-group">
-        <label><i class="fa-solid fa-tag me-1"></i>Category</label>
-        <div class="filter-cat-row">
-          ${cats.map(c => `
-            <button class="btn-filter-cat ${f.category === c ? 'on' : ''}"
-                    onclick="setHistFilterCat('${c}')">
-              ${CAT_ICONS[c] || ''} ${c.charAt(0).toUpperCase()+c.slice(1)}
-            </button>`).join('')}
+      <div class="dialog-body" v-if="editRec">
+        <label class="form-label">Correction notes</label>
+        <textarea class="form-textarea" v-model="editRec.correction" rows="3"></textarea>
+        <div class="flex flex-wrap g4 mt2">
+          <label class="rb-label"><input type="radio" v-model="editRec.action" value="good" /> <span class="badge-good">good</span></label>
+          <label class="rb-label"><input type="radio" v-model="editRec.action" value="bad"  /> <span class="badge-bad">bad</span></label>
+          <label class="rb-label"><input type="radio" v-model="editRec.action" value=""    /> <span class="badge-none">none</span></label>
         </div>
       </div>
-      <div class="filter-group">
-        <label><i class="fa-solid fa-indian-rupee-sign me-1"></i>Amount</label>
-        <div class="filter-amount-row">
-          <select class="filter-select" id="hf-amount-op" onchange="onFilterChange()">
-            <option value="" ${!f.amountOp ? 'selected':''}>—</option>
-            <option value="gte" ${f.amountOp==='gte' ? 'selected':''}>≥</option>
-            <option value="lte" ${f.amountOp==='lte' ? 'selected':''}>≤</option>
-          </select>
-          <input type="number" class="filter-input" id="hf-amount-val"
-                 placeholder="e.g. 500" value="${f.amountVal}"
-                 oninput="onFilterChange()" style="width:90px" />
-        </div>
+      <div class="dialog-footer">
+        <button class="btn btn-secondary" @click="editVisible=false">Cancel</button>
+        <button class="btn btn-primary"   @click="saveEdit"><i class="pi pi-save"></i> Save</button>
       </div>
-      <div class="filter-group" style="justify-content:flex-end">
-        <button class="btn-clear-filter" id="hist-clear-filter-btn"
-                style="display:${fCount ? '' : 'none'}" onclick="clearFilters()">
-          <i class="fa-solid fa-xmark"></i> Clear filters
-        </button>
-      </div>
-    </div>`;
+    </div>
+  </div>
 
-  const toolbar = `
-    <div class="hist-toolbar">
-      <span class="hist-total">${items.length} unique image${items.length !== 1 ? 's' : ''}</span>
-      <button class="btn-clear-hist" onclick="clearHistory()" ${!items.length ? 'disabled' : ''}>
-        <i class="fa-solid fa-trash-can"></i> Clear History
+  <!-- ── TOAST ── -->
+  <div class="toast" :class="[toastSev, {show: toastShow}]">{{ toastMsg }}</div>
+
+  <!-- ── HEADER ── -->
+  <div class="header">
+    <i class="pi pi-receipt" style="color:#93c5fd;font-size:1.2rem"></i>
+    <span class="header-brand">Bill <span>Extractor</span></span>
+    <div class="header-right">
+      <button class="btn btn-ghost btn-icon" style="color:rgba(255,255,255,0.6)"
+              title="Reload history" @click="loadHistory">
+        <i class="pi pi-sync"></i>
       </button>
-    </div>`;
+      <button class="btn btn-ghost btn-icon" style="color:rgba(255,255,255,0.6)"
+              title="Settings" @click="activeTab='settings'">
+        <i class="pi pi-cog"></i>
+      </button>
+    </div>
+  </div>
 
-  body.innerHTML = toolbar + sortBar + filterPanel + '<div id="hist-rows-wrap"></div><div id="hist-summary-wrap"></div>';
+  <!-- ── TAB BAR ── -->
+  <div class="tabbar">
+    <button class="tab" :class="{active:activeTab==='upload'}"   @click="activeTab='upload'">
+      <i class="pi pi-upload" style="margin-right:4px"></i>Upload
+    </button>
+    <button class="tab" :class="{active:activeTab==='history'}"  @click="activeTab='history'">
+      <i class="pi pi-list" style="margin-right:4px"></i>History
+      <span v-if="allRecords.length" class="tab-badge">{{ visibleRecords.length }}</span>
+    </button>
+    <button class="tab" :class="{active:activeTab==='settings'}" @click="activeTab='settings'">
+      <i class="pi pi-cog" style="margin-right:4px"></i>Settings
+    </button>
+  </div>
 
-  if (!items.length) {
-    document.getElementById('hist-rows-wrap').innerHTML =
-      '<p class="hist-empty">No history yet. Use <strong>Reset</strong> to save the current session.</p>';
-    return;
-  }
+  <div class="main">
 
-  _updateHistoryRows();
-}
+    <!-- ══════════════════ UPLOAD TAB ══════════════════ -->
+    <div v-show="activeTab==='upload'">
 
-async function deleteSessionItem(hash, btn) {
-  btn.disabled = true;
-  try {
-    await fetch(`/api/cache/${hash}`, { method: 'DELETE' });
-    btn.closest('.result-row').remove();
-    // Remove from summary table
-    document.querySelector(`#summaryBody tr[data-hash="${hash}"]`)?.remove();
-    if (!document.querySelector('#summaryBody tr')) {
-      document.getElementById('summaryWrap').style.display = 'none';
-    }
-    updateExportBtn();
-    updateTabCount();
-    const body = document.getElementById('resultsBody');
-    if (!body.children.length) {
-      document.getElementById('resultsWrap').style.display = 'none';
-      document.getElementById('emptyState').style.display  = '';
-    }
-    showToast('Entry removed from session', 'info');
-  } catch {
-    btn.disabled = false;
-    showToast('Failed to delete entry', 'error');
-  }
-}
+      <!-- Drop zone -->
+      <div class="drop-zone" @click="$refs.fileInput.click()">
+        <i class="pi pi-cloud-upload drop-icon"></i>
+        <p style="margin:0;font-weight:600;color:#1e293b">Click to upload or drag &amp; drop</p>
+        <p style="margin:4px 0 0;color:#64748b;font-size:0.82rem">JPEG · PNG · WebP · PDF · Multiple files supported</p>
+        <input ref="fileInput" type="file" accept=".jpg,.jpeg,.png,.webp,.pdf" multiple style="display:none" @change="onFileInput" />
+      </div>
 
-async function deleteHistoryItem(hash, btn) {
-  if (!confirm('Remove this entry from history?')) return;
-  btn.disabled = true;
-  try {
-    await fetch(`/api/history/${hash}`, { method: 'DELETE' });
-    // Remove the row from the DOM
-    btn.closest('.result-row').remove();
-    // Update count
-    const remaining = document.querySelectorAll('#historyRows .result-row').length;
-    document.getElementById('tab-history-count').textContent = remaining;
-    document.querySelector('.hist-total').textContent =
-      `${remaining} unique image${remaining !== 1 ? 's' : ''}`;
-    showToast('Entry removed from history', 'info');
-  } catch {
-    btn.disabled = false;
-    showToast('Failed to delete entry', 'error');
-  }
-}
-
-async function clearHistory() {
-  if (!confirm('Clear all history? This cannot be undone.')) return;
-  await fetch('/api/history', { method: 'DELETE' });
-  renderHistoryTab([]);
-  document.getElementById('tab-history-count').textContent = 0;
-  showToast('History cleared', 'info');
-}
-
-// ─────────────────────────────────────────────────────────────
-// Reset
-// ─────────────────────────────────────────────────────────────
-async function resetSession() {
-  const n = document.getElementById('resultsBody').children.length;
-  const confirmMsg = n > 0
-    ? `Save ${n} item${n !== 1 ? 's' : ''} to history and clear the session?`
-    : 'Clear the current session?';
-  if (!confirm(confirmMsg)) return;
-
-  const res  = await fetch('/api/reset', { method: 'POST' });
-  const data = await res.json();
-
-  document.getElementById('resultsBody').innerHTML = '';
-  document.getElementById('summaryBody').innerHTML  = '';
-  document.getElementById('resultsWrap').style.display = 'none';
-  document.getElementById('summaryWrap').style.display = 'none';
-  document.getElementById('emptyState').style.display  = '';
-  updateTabCount();
-  const added = data.added ?? 0;
-  const toastMsg = added > 0
-    ? `${added} new item${added !== 1 ? 's' : ''} saved to history`
-    : n > 0 ? 'All items already in history — session cleared' : 'Session cleared';
-  showToast(toastMsg, 'success');
-}
-
-// ─────────────────────────────────────────────────────────────
-// Utilities
-// ─────────────────────────────────────────────────────────────
-function fmtDate(ts) {
-  if (!ts) return '';
-  try {
-    const d = new Date(ts);
-    return d.toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' })
-      + ' ' + d.toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
-  } catch { return ts.replace('T',' ').slice(0,16); }
-}
-
-function esc(s) {
-  return String(s ?? '')
-    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
-    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
-function cap(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
-
-// ─────────────────────────────────────────────────────────────
-// Summary table
-// ─────────────────────────────────────────────────────────────
-function parsePlainText(text) {
-  const result = {};
-  for (const line of text.split('\n')) {
-    const idx = line.indexOf(':');
-    if (idx > 0) {
-      const key = line.slice(0, idx).trim().toLowerCase().replace(/\s+/g, '_');
-      result[key] = line.slice(idx + 1).trim();
-    }
-  }
-  return result;
-}
-
-function _summaryFields(data) {
-  const result     = data.result || {};
-  const correction = data.correction || '';
-  const effective  = correction ? { ...result, ...parsePlainText(correction) } : result;
-  const cat  = (effective.category   || '').toLowerCase();
-  const meal = (effective.meal_type  || '').toLowerCase().replace(/\s/g, '');
-  const catCol = (meal && meal !== 'unknown') ? `${cat}_${meal}` : cat;
-  const rawAmt = effective.total_amount ?? effective.amount ?? '';
-  // For hotel bills, use check-in date when date is absent
-  const date = effective.date || (cat === 'hotel' ? (effective.check_in || '') : '');
-  return {
-    filename: data.filename_generated || data.filename || '',
-    date,
-    catCol,
-    amount:   rawAmt !== '' ? String(rawAmt) : '',
-  };
-}
-
-function addSummaryRow(id, data) {
-  const tbody = document.getElementById('summaryBody');
-  if (!tbody) return;
-  const f = _summaryFields(data);
-  tbody.insertAdjacentHTML('beforeend', `
-    <tr id="sum-${id}" data-hash="${esc(data.hash || '')}">
-      <td style="text-align:center;"><input type="checkbox" class="row-check" onchange="updateExportBtn()"></td>
-      <td class="sum-filename">${esc(f.filename)}</td>
-      <td class="sum-date">${esc(f.date)}</td>
-      <td class="sum-cat">${esc(f.catCol)}</td>
-      <td class="sum-amount" style="text-align:right;">${esc(f.amount)}</td>
-    </tr>`);
-  document.getElementById('summaryWrap').style.display = '';
-  updateExportBtn();
-}
-
-function updateSummaryRow(id, correctionText) {
-  const row = document.getElementById(`sum-${id}`);
-  if (!row) return;
-  const parsed   = parsePlainText(correctionText);
-  const dateEl   = row.querySelector('.sum-date');
-  const catEl    = row.querySelector('.sum-cat');
-  const amtEl    = row.querySelector('.sum-amount');
-  if (dateEl && parsed.date)     dateEl.textContent = parsed.date;
-  if (catEl) {
-    const cat  = (parsed.category  || catEl.textContent.split('_')[0] || '').toLowerCase();
-    const meal = (parsed.meal_type || '').toLowerCase().replace(/\s/g, '');
-    catEl.textContent = (meal && meal !== 'unknown') ? `${cat}_${meal}` : cat;
-  }
-  if (amtEl) {
-    const rawAmt = parsed.total_amount ?? parsed.amount;
-    if (rawAmt !== undefined) amtEl.textContent = String(rawAmt);
-  }
-}
-
-function toggleSelectAll(cb) {
-  document.querySelectorAll('#summaryBody .row-check').forEach(c => c.checked = cb.checked);
-  updateExportBtn();
-}
-
-function updateExportBtn() {
-  const count   = document.querySelectorAll('#summaryBody .row-check:checked').length;
-  const btn     = document.getElementById('btnExport');
-  const countEl = document.getElementById('summarySelCount');
-  if (btn)     btn.disabled     = count === 0;
-  if (countEl) countEl.textContent = count ? `${count} selected` : '';
-  const allCbs = document.querySelectorAll('#summaryBody .row-check');
-  const selAll = document.getElementById('selectAll');
-  if (selAll && allCbs.length) {
-    selAll.indeterminate = count > 0 && count < allCbs.length;
-    selAll.checked       = count > 0 && count === allCbs.length;
-  }
-}
-
-async function exportSelected() {
-  const hashes = [...document.querySelectorAll('#summaryBody .row-check:checked')]
-    .map(cb => cb.closest('tr')?.dataset.hash).filter(Boolean);
-  if (!hashes.length) { showToast('No items selected', 'error'); return; }
-
-  const btn = document.getElementById('btnExport');
-  btn.disabled = true;
-  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Exporting…';
-  try {
-    const res = await fetch('/api/export', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ hashes })
-    });
-    if (!res.ok) throw new Error(await res.text());
-    const blob = await res.blob();
-    const url  = URL.createObjectURL(blob);
-    const a    = document.createElement('a');
-    a.href = url; a.download = 'bills_export.zip'; a.click();
-    URL.revokeObjectURL(url);
-    showToast(`Exported ${hashes.length} item${hashes.length !== 1 ? 's' : ''}`, 'success');
-  } catch (err) {
-    showToast('Export failed: ' + err.message, 'error');
-  } finally {
-    btn.disabled = false;
-    btn.innerHTML = '<i class="fa-solid fa-file-zipper"></i> Export Selected';
-    updateExportBtn();
-  }
-}
-
-// ─────────────────────────────────────────────────────────────
-// History summary
-// ─────────────────────────────────────────────────────────────
-function _buildHistorySummary(items) {
-  const wrap = document.getElementById('hist-summary-wrap');
-  if (!wrap) return;
-  if (!items.length) { wrap.innerHTML = ''; return; }
-
-  const rows = items.map(item => {
-    const f = _summaryFields(item);
-    return `<tr data-hash="${esc(item.hash||'')}">
-      <td style="text-align:center;"><input type="checkbox" class="hist-row-check" onchange="updateHistExportBtn()"></td>
-      <td class="sum-filename">${esc(f.filename)}</td>
-      <td>${esc(f.date)}</td>
-      <td>${esc(f.catCol)}</td>
-      <td class="sum-amount">${esc(f.amount)}</td>
-    </tr>`;
-  }).join('');
-
-  wrap.innerHTML = `
-    <div class="summary-wrap" style="margin-top:1.25rem;">
-      <div class="summary-header">
-        <div class="summary-title"><i class="fa-solid fa-table-list"></i> Summary</div>
-        <div class="summary-actions">
-          <span class="summary-sel-count" id="hist-sel-count"></span>
-          <button class="btn-export" id="hist-btn-export" onclick="exportHistSelected()" disabled>
-            <i class="fa-solid fa-file-zipper"></i> Export Selected
+      <!-- Session results — one card per file, newest on top -->
+      <div v-if="sessionResults.length" style="margin-top:1.25rem">
+        <div class="flex items-center justify-between mb2">
+          <span style="font-size:0.82rem;color:#64748b;font-weight:500">{{ sessionResults.length }} file{{ sessionResults.length===1?'':'s' }} this session</span>
+          <button class="btn btn-ghost btn-sm" @click="sessionResults=[]" style="color:#94a3b8">
+            <i class="pi pi-times"></i> Clear
           </button>
         </div>
+
+        <div v-for="item in sessionResults" :key="item._id" class="card mb2">
+
+          <!-- PROCESSING state -->
+          <div v-if="item._status==='processing'" class="flex items-center g2" style="color:#64748b">
+            <div class="spinner" style="width:22px;height:22px;border-width:2px;flex-shrink:0"></div>
+            <span style="font-size:0.88rem">Processing <strong>{{ item._filename }}</strong>…</span>
+          </div>
+
+          <!-- ERROR state -->
+          <div v-else-if="item._status==='error'" class="flex items-center g2" style="color:#dc2626">
+            <i class="pi pi-exclamation-circle" style="flex-shrink:0"></i>
+            <span style="font-size:0.88rem"><strong>{{ item._filename }}</strong> — {{ item._errorMsg }}</span>
+          </div>
+
+          <!-- DUPLICATE state -->
+          <div v-else-if="item._status==='duplicate'">
+            <div class="flex items-center g2" style="color:#92400e;font-size:0.88rem;margin-bottom:0.5rem">
+              <i class="pi pi-exclamation-triangle" style="flex-shrink:0"></i>
+              <span><strong>{{ item._filename }}</strong> — already processed on {{ fmtTs(item._dupRecord.timestamp) }}</span>
+            </div>
+            <div class="flex g2">
+              <button class="btn btn-secondary btn-sm" @click="activeTab='history'">
+                <i class="pi pi-list"></i> View in history
+              </button>
+              <button class="btn btn-secondary btn-sm" @click="reprocessItem(item)">
+                <i class="pi pi-refresh"></i> Process anyway
+              </button>
+            </div>
+          </div>
+
+          <!-- OK state -->
+          <div v-else-if="item._status==='ok'">
+            <div class="flex items-center justify-between flex-wrap g2 mb2">
+              <span style="font-size:0.82rem;color:#64748b;word-break:break-all">{{ item._filename }}</span>
+              <div class="flex g2">
+                <button class="btn btn-success btn-sm" @click="markItem(item,'good')">
+                  <i class="pi pi-thumbs-up"></i> Good
+                </button>
+                <button class="btn btn-danger btn-sm" @click="markItem(item,'bad')">
+                  <i class="pi pi-thumbs-down"></i> Bad
+                </button>
+              </div>
+            </div>
+
+            <div class="flex g3 flex-wrap">
+              <div>
+                <img v-if="item._thumb" :src="item._thumb" class="thumb" @click="lightboxSrc=item._thumb" />
+                <div v-else class="thumb-ph"><i class="pi pi-image"></i></div>
+              </div>
+              <div class="flex-1" style="min-width:220px">
+                <span :class="catClass(item.category)" style="margin-bottom:8px;display:inline-flex">
+                  {{ catIcon(item.category) }} {{ item.category || 'unknown' }}
+                </span>
+                <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px;margin-top:6px">
+                  <div><div class="fl">Date</div><div class="fv">{{ item.date || '—' }}</div></div>
+                  <div><div class="fl">Time</div><div class="fv">{{ item.time || '—' }}</div></div>
+                  <div><div class="fl">Amount</div><div class="fv-amount">{{ fmtAmt(item) }}</div></div>
+                  <div v-if="item.meal_type"><div class="fl">Meal</div><div class="fv">{{ item.meal_type }}</div></div>
+                  <div v-if="item.from_location || item.to_location" style="grid-column:span 2">
+                    <div class="fl">Route</div>
+                    <div class="fv">{{ item.from_location }} → {{ item.to_location }}</div>
+                  </div>
+                  <div v-if="item.hotel_name" style="grid-column:span 2">
+                    <div class="fl">Hotel</div><div class="fv">{{ item.hotel_name }}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="mt2">
+              <label class="form-label">Correction notes (optional)</label>
+              <textarea class="form-textarea" v-model="item._correction" rows="2"
+                        placeholder="e.g. amount should be 450, not 400"></textarea>
+            </div>
+            <div class="flex g2 mt2 flex-wrap">
+              <button class="btn btn-secondary btn-sm" @click="saveItemCorrection(item)"
+                      :disabled="!item._hash">
+                <i class="pi pi-save"></i> Save correction
+              </button>
+              <button class="btn btn-secondary btn-sm" @click="downloadRenamedItem(item)"
+                      :disabled="!item._file">
+                <i class="pi pi-download"></i> Download renamed copy
+              </button>
+            </div>
+          </div>
+
+        </div>
       </div>
-      <table class="summary-table">
-        <thead>
-          <tr>
-            <th style="width:36px;text-align:center;">
-              <input type="checkbox" id="hist-select-all" onchange="toggleHistSelectAll(this)">
-            </th>
-            <th>Filename</th>
-            <th>Date</th>
-            <th>Category</th>
-            <th style="text-align:right;">Amount</th>
-          </tr>
-        </thead>
-        <tbody>${rows}</tbody>
-      </table>
-    </div>`;
+
+    </div>
+
+    <!-- ══════════════════ HISTORY TAB ══════════════════ -->
+    <div v-show="activeTab==='history'">
+
+      <div v-if="!allRecords.length" class="empty-state card">
+        <i class="pi pi-folder-open ei"></i>
+        <p>No history yet. Upload a receipt to get started.</p>
+      </div>
+
+      <div v-else>
+        <!-- Date range card -->
+        <div class="card mb2">
+          <div class="flex items-center g2 flex-wrap mb2">
+            <span style="font-weight:600;font-size:0.88rem">Date range</span>
+            <button v-for="p in datePresets" :key="p.label"
+                    class="preset" :class="{active:activePreset===p.label}" @click="applyPreset(p)"
+                    :title="p.title||p.label">
+              {{ p.label }}
+            </button>
+          </div>
+          <!-- Two-thumb range slider — drag either thumb, or click the track -->
+          <div ref="sliderTrack" class="slider-wrap" style="margin:8px 0;cursor:default;user-select:none"
+               @mousedown="sliderTrackDown($event)">
+            <div class="slider-track"></div>
+            <div class="slider-fill" :style="{left:sliderLeftPct+'%', width:sliderWidthPct+'%'}"></div>
+            <div class="slider-thumb" :style="{left:sliderLeftPct+'%',zIndex:sliderDragging==='lo'?4:2}"
+                 @mousedown.stop="startDrag($event,'lo')"></div>
+            <div class="slider-thumb" :style="{left:sliderRightPct+'%',zIndex:sliderDragging==='hi'?4:2}"
+                 @mousedown.stop="startDrag($event,'hi')"></div>
+          </div>
+          <div style="display:flex;justify-content:space-between;font-size:0.72rem;color:#64748b;margin-top:4px">
+            <span>{{ monthLabel(sliderRange[0]) }}</span>
+            <span>{{ monthLabel(sliderRange[1]) }}</span>
+          </div>
+          <div style="font-size:0.78rem;color:#64748b;margin-top:4px">
+            Showing {{ visibleRecords.length }} of {{ allRecords.length }} records
+          </div>
+        </div>
+
+        <!-- Toolbar: columns + filter + export + reset -->
+        <div class="flex items-center justify-between flex-wrap g2 mb2">
+          <div class="flex flex-wrap g1 items-center">
+            <button v-for="col in toggleCols" :key="col.field"
+                    class="col-chip" :class="{on:col.visible}"
+                    @click="col.visible=!col.visible"
+                    title="Click to show/hide — drag column headers to reorder">
+              <i :class="col.visible?'pi pi-check':'pi pi-plus'" style="font-size:0.6rem"></i>
+              {{ col.header }}
+            </button>
+            <button class="col-chip" :class="{on:filterOpen||activeFilterCount>0}"
+                    @click="filterOpen=!filterOpen" style="margin-left:4px">
+              <i class="pi pi-filter" style="font-size:0.6rem"></i>
+              Filter
+              <span v-if="activeFilterCount>0"
+                    style="background:#3b82f6;color:#fff;border-radius:10px;padding:0 6px;font-size:0.65rem">
+                {{ activeFilterCount }}
+              </span>
+            </button>
+          </div>
+          <div class="flex g2 flex-wrap">
+            <button class="btn btn-secondary btn-sm" @click="exportCSV" :disabled="!visibleRecords.length">
+              <i class="pi pi-download"></i> Export CSV
+            </button>
+            <button class="btn btn-danger btn-sm" @click="resetHistory" :disabled="!allRecords.length">
+              <i class="pi pi-trash"></i> Reset all
+            </button>
+          </div>
+        </div>
+
+        <!-- Filter panel -->
+        <div v-if="filterOpen" class="card mb2" style="padding:1rem;background:#f8fafc">
+          <div class="flex flex-wrap g3 items-center">
+            <!-- Date From / To -->
+            <div>
+              <div class="form-label">Date from</div>
+              <input type="date" class="form-input" v-model="filterDateFrom" style="width:140px" />
+            </div>
+            <div>
+              <div class="form-label">Date to</div>
+              <input type="date" class="form-input" v-model="filterDateTo" style="width:140px" />
+            </div>
+            <!-- Category -->
+            <div>
+              <div class="form-label">Category</div>
+              <div class="flex g1">
+                <button v-for="c in ['food','travel','hotel']" :key="c"
+                        class="col-chip" :class="{on:filterCat===c}" @click="filterCat=filterCat===c?'':c">
+                  {{ {food:'🍽',travel:'✈',hotel:'🏨'}[c] }} {{ c }}
+                </button>
+              </div>
+            </div>
+            <!-- Amount -->
+            <div>
+              <div class="form-label">Amount</div>
+              <div class="flex g1 items-center">
+                <select class="form-select" v-model="filterAmountOp" style="width:60px">
+                  <option value="">—</option>
+                  <option value="gte">≥</option>
+                  <option value="lte">≤</option>
+                </select>
+                <input type="number" class="form-input" v-model="filterAmountVal"
+                       placeholder="e.g. 500" style="width:90px" :disabled="!filterAmountOp" />
+              </div>
+            </div>
+            <!-- Clear -->
+            <div style="align-self:flex-end">
+              <button class="btn btn-ghost btn-sm" @click="clearFilters" :disabled="!activeFilterCount">
+                <i class="pi pi-times"></i> Clear filters
+              </button>
+            </div>
+          </div>
+          <div v-if="activeFilterCount" style="font-size:0.75rem;color:#64748b;margin-top:0.5rem">
+            {{ visibleRecords.length }} of {{ allRecords.length }} records match
+          </div>
+        </div>
+
+        <!-- Bulk-action bar -->
+        <div v-if="selectedHashes.size > 0"
+             style="background:#fef9c3;border:1px solid #fde047;border-radius:7px;padding:0.6rem 1rem;margin-bottom:0.75rem;display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap">
+          <span style="font-size:0.85rem;font-weight:500;color:#713f12">
+            {{ selectedHashes.size }} selected
+          </span>
+          <button class="btn btn-danger btn-sm" @click="deleteSelected">
+            <i class="pi pi-trash"></i> Delete selected
+          </button>
+          <button class="btn btn-ghost btn-sm" @click="selectedHashes=new Set()" style="color:#713f12">
+            <i class="pi pi-times"></i> Clear selection
+          </button>
+        </div>
+
+        <!-- Table -->
+        <div class="card" style="padding:0;overflow-x:auto">
+          <!-- Thumbnail hover preview — fixed, pointer-events:none -->
+          <div v-if="thumbHover.visible"
+               style="position:fixed;z-index:5000;pointer-events:none;background:#fff;border:1px solid #e2e8f0;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,0.18);padding:4px"
+               :style="{top:thumbHover.top+'px',left:thumbHover.left+'px'}">
+            <img :src="thumbHover.src" style="display:block;max-width:560px;max-height:80vh;border-radius:5px" />
+          </div>
+
+          <table class="hist-table">
+            <thead>
+              <tr>
+                <th style="width:36px;text-align:center">
+                  <input type="checkbox" :checked="allPageSelected" @change="toggleSelectPage"
+                         style="accent-color:#3b82f6;cursor:pointer" />
+                </th>
+                <th style="width:68px"></th><!-- thumbnail — fixed, not sortable/draggable -->
+                <template v-for="(col, idx) in toggleCols" :key="col.field">
+                  <th v-if="col.visible"
+                      draggable="true"
+                      :class="['col-sortable', {
+                        'col-sorted': sortField===col.field,
+                        'th-drag-over': dragOverIdx===idx
+                      }]"
+                      @dragstart.stop="onColDragStart(idx)"
+                      @dragover.prevent="onColDragOver(idx)"
+                      @drop.prevent="onColDrop(idx)"
+                      @dragend="onColDragEnd"
+                      @click="col.field!=='ocr_text' && toggleSort(col.field)"
+                      :title="col.field!=='ocr_text'?'Click to sort · Drag to reorder':'Drag to reorder'">
+                    {{ col.header }}
+                    <span v-if="col.field!=='ocr_text'" style="font-size:0.6rem;margin-left:2px;opacity:0.6">
+                      <template v-if="sortField===col.field">{{ sortDir==='asc'?'▲':'▼' }}</template>
+                      <template v-else>⇅</template>
+                    </span>
+                  </th>
+                </template>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-if="!pageRecords.length">
+                <td colspan="12" style="text-align:center;padding:2rem;color:#94a3b8">
+                  No records match the current filters.
+                </td>
+              </tr>
+              <tr v-for="rec in pageRecords" :key="rec.hash"
+                  :style="selectedHashes.has(rec.hash)?'background:#fefce8':''">
+                <td style="text-align:center">
+                  <input type="checkbox" :checked="selectedHashes.has(rec.hash)"
+                         @change="toggleSelect(rec.hash)"
+                         style="accent-color:#3b82f6;cursor:pointer" />
+                </td>
+                <!-- Thumbnail — first data column, hover to preview -->
+                <td style="width:68px;padding:6px 8px">
+                  <div v-if="rec.thumbnail"
+                       @mouseenter="showThumbPreview($event, rec.thumbnail)"
+                       @mouseleave="hideThumbPreview"
+                       @click="lightboxSrc=rec.thumbnail"
+                       style="cursor:zoom-in">
+                    <img :src="rec.thumbnail" style="width:60px;height:60px;object-fit:cover;border-radius:5px;border:1px solid #e2e8f0;display:block" />
+                  </div>
+                  <div v-else class="ht-ph" style="width:60px;height:60px">
+                    <i class="pi pi-image" style="font-size:1rem"></i>
+                  </div>
+                </td>
+                <template v-for="col in toggleCols" :key="col.field">
+                  <td v-if="col.visible" :style="tdColStyle(col.field)">
+                    <template v-if="col.field==='date'">{{ rec.result?.date || '—' }}</template>
+                    <template v-else-if="col.field==='category'"><span :class="catClass(rec.result?.category)">{{ catIcon(rec.result?.category) }} {{ rec.result?.category || '—' }}</span></template>
+                    <template v-else-if="col.field==='amount'">{{ fmtAmt(rec.result) }}</template>
+                    <template v-else-if="col.field==='meal_type'">{{ rec.result?.meal_type || '—' }}</template>
+                    <template v-else-if="col.field==='time'">{{ rec.result?.time || '—' }}</template>
+                    <template v-else-if="col.field==='added'">{{ fmtTs(rec.timestamp) }}</template>
+                    <template v-else-if="col.field==='filename'"><span style="font-size:0.72rem;color:#64748b;word-break:break-all">{{ rec.filename_generated || rec.filename }}</span></template>
+                    <template v-else-if="col.field==='status'"><span :class="badgeClass(rec.action)">{{ rec.action || 'none' }}</span></template>
+                    <template v-else-if="col.field==='ocr_text'">
+                      <div v-if="rec.ocr_text?.length" class="ocr-cell">{{ rec.ocr_text.join('\n') }}</div>
+                      <span v-else style="color:#94a3b8">—</span>
+                    </template>
+                  </td>
+                </template>
+                <td>
+                  <div class="flex g1">
+                    <button class="btn btn-ghost btn-icon btn-sm" title="Edit"   @click="openEdit(rec)"><i class="pi pi-pencil"></i></button>
+                    <button v-if="rec.original_file" class="btn btn-ghost btn-icon btn-sm" title="Download original" @click="downloadOriginal(rec)" style="color:#3b82f6"><i class="pi pi-download"></i></button>
+                    <button class="btn btn-ghost btn-icon btn-sm" title="Delete" @click="deleteRec(rec)" style="color:#dc2626"><i class="pi pi-trash"></i></button>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          <!-- Pagination -->
+          <div class="pagination" v-if="totalPages > 1">
+            <button class="page-btn" @click="page--" :disabled="page===1">‹</button>
+            <button v-for="n in totalPages" :key="n" class="page-btn" :class="{active:page===n}" @click="page=n">{{ n }}</button>
+            <button class="page-btn" @click="page++" :disabled="page===totalPages">›</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════════ SETTINGS TAB ══════════════════ -->
+    <div v-show="activeTab==='settings'">
+      <div class="card">
+
+        <div class="sec-label">Server config</div>
+        <div v-if="serverCfg" style="font-size:0.82rem;color:#64748b;margin-bottom:0.75rem;display:grid;gap:4px">
+          <div><span style="font-weight:600;color:#374151">History file:</span>
+            <code style="background:#f1f5f9;border-radius:4px;padding:1px 5px;font-size:0.78rem;margin-left:4px">{{ serverCfg.history_file }}</code></div>
+          <div><span style="font-weight:600;color:#374151">Files dir:</span>
+            <code style="background:#f1f5f9;border-radius:4px;padding:1px 5px;font-size:0.78rem;margin-left:4px">{{ serverCfg.files_dir }}</code></div>
+        </div>
+        <div class="settings-grid" style="margin-bottom:0.5rem">
+          <div>
+            <label class="form-label">Remote OCR URL</label>
+            <input class="form-input" v-model="cfgEdit.ocr_url" placeholder="null — use local models" />
+            <div style="font-size:0.75rem;color:#64748b;margin-top:4px">
+              Leave blank to use local models. Set to a headless server URL to proxy OCR there.
+            </div>
+          </div>
+          <div>
+            <label class="form-label">Server port</label>
+            <input class="form-input" type="number" v-model.number="cfgEdit.port" placeholder="8080" style="width:100px" />
+            <div style="font-size:0.75rem;color:#64748b;margin-top:4px">Takes effect on next restart.</div>
+          </div>
+        </div>
+        <div style="font-size:0.8rem;display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap;margin-bottom:0.75rem">
+          <span v-if="ocrHealth===null" style="color:#94a3b8">⊙ Status unknown</span>
+          <span v-else-if="ocrHealth.model_loaded" style="color:#16a34a">✓ Models loaded — running locally</span>
+          <span v-else style="color:#d97706">⚠ Remote OCR mode — models not loaded locally</span>
+          <button class="btn btn-ghost btn-sm" @click="checkHealth"><i class="pi pi-refresh"></i></button>
+          <button class="btn btn-secondary btn-sm" @click="saveServerCfg" :disabled="cfgSaving">
+            <i class="pi pi-save"></i> Apply config
+          </button>
+        </div>
+
+        <div class="sec-label">Storage</div>
+        <div v-if="storageUsage" style="font-size:0.8rem;margin-bottom:0.75rem;display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap">
+          <span style="color:#64748b">
+            Disk used:
+            <strong style="color:#1e293b">{{ fmtBytes(storageUsage.total_bytes) }}</strong>
+            (history: {{ fmtBytes(storageUsage.history_bytes) }}, files: {{ fmtBytes(storageUsage.files_bytes) }})
+          </span>
+          <span v-if="storageUsage.total_bytes > 200*1024*1024"
+                style="background:#fef3c7;color:#92400e;border:1px solid #fcd34d;border-radius:5px;padding:2px 8px;font-size:0.75rem">
+            ⚠ Over 200 MB — consider exporting a backup
+          </span>
+        </div>
+        <div v-else style="font-size:0.8rem;color:#94a3b8;margin-bottom:0.75rem">
+          Calculating storage…
+        </div>
+        <div class="flex items-center g2 flex-wrap">
+          <button class="btn btn-secondary btn-sm" @click="exportJSON">
+            <i class="pi pi-download"></i> Export JSON backup
+          </button>
+          <button class="btn btn-secondary btn-sm" @click="$refs.jsonImport.click()">
+            <i class="pi pi-upload"></i> Import JSON
+          </button>
+          <input ref="jsonImport" type="file" accept=".json" style="display:none" @change="onImportJSON" />
+        </div>
+
+        <div class="sec-label">Original files</div>
+        <p style="font-size:0.85rem;color:#374151;margin:0 0 0.75rem">
+          A copy of every uploaded file (image or PDF) is saved on disk automatically in the files dir above.
+          Use the <i class="pi pi-download" style="font-size:0.8rem;color:#3b82f6"></i> button on any history row to download it for attaching to an expense form.
+        </p>
+
+        <div class="sec-label">History defaults</div>
+        <div class="settings-grid">
+          <div>
+            <label class="form-label">Default date range on open</label>
+            <select class="form-select" v-model="cfg.defaultRange">
+              <option v-for="o in ['1M','3M','6M','YTD','All']" :key="o">{{ o }}</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="sec-label">Export</div>
+        <div class="settings-grid">
+          <div>
+            <label class="form-label">Date format</label>
+            <select class="form-select" v-model="cfg.dateFormat">
+              <option v-for="o in ['DD/MM/YYYY','MM/DD/YYYY','YYYY-MM-DD']" :key="o">{{ o }}</option>
+            </select>
+          </div>
+          <div>
+            <label class="form-label">CSV delimiter</label>
+            <select class="form-select" v-model="cfg.csvDelimiter">
+              <option value=",">Comma (,)</option>
+              <option value=";">Semicolon (;)</option>
+              <option value="&#9;">Tab</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="sec-label">File naming (renamed copy)</div>
+        <div class="flex flex-wrap g4 mt1">
+          <label class="cb-label"><input type="checkbox" v-model="cfg.nameDate"     /> Include date</label>
+          <label class="cb-label"><input type="checkbox" v-model="cfg.nameCategory" /> Include category</label>
+          <label class="cb-label"><input type="checkbox" v-model="cfg.nameMeal"     /> Include meal type</label>
+        </div>
+
+        <div class="mt3">
+          <button class="btn btn-primary" @click="saveCfg"><i class="pi pi-save"></i> Save settings</button>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /main -->
+</div><!-- /#app -->
+
+<script>
+const { createApp, ref, computed, watch, onMounted } = Vue;
+
+// ── API helpers ────────────────────────────────────────────────────
+async function apiGet(path) {
+  const r = await fetch(path);
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+async function apiDelete(path) {
+  const r = await fetch(path, {method:'DELETE'});
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+async function apiPostHistory(record, file) {
+  const fd = new FormData();
+  fd.append('record', JSON.stringify(record));
+  if (file) fd.append('file', file);
+  const r = await fetch('/history', {method:'POST', body:fd});
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
 }
 
-function updateHistExportBtn() {
-  const count   = document.querySelectorAll('.hist-row-check:checked').length;
-  const btn     = document.getElementById('hist-btn-export');
-  const countEl = document.getElementById('hist-sel-count');
-  if (btn)     btn.disabled        = count === 0;
-  if (countEl) countEl.textContent = count ? `${count} selected` : '';
-  const allCbs = document.querySelectorAll('.hist-row-check');
-  const selAll = document.getElementById('hist-select-all');
-  if (selAll && allCbs.length) {
-    selAll.indeterminate = count > 0 && count < allCbs.length;
-    selAll.checked       = count > 0 && count === allCbs.length;
+// ── Month helpers ──────────────────────────────────────────────────
+const MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const toMIdx = d => d.getFullYear()*12 + d.getMonth();
+const fromMIdx = i => ({ year: Math.floor(i/12), month: i%12 });
+
+function parseDate(s) {
+  if (!s) return null;
+  const p = s.split(/[-\/]/);
+  if (p.length !== 3) return null;
+  const [a,b,c] = p.map(Number);
+  const d = String(p[0]).length===4 ? new Date(a,b-1,c) : new Date(c,b-1,a);
+  return isNaN(d) ? null : d;
+}
+
+// ── Thumbnail ──────────────────────────────────────────────────────
+async function makeThumbnail(file) {
+  if (file.type === 'application/pdf') {
+    try {
+      if (typeof pdfjsLib === 'undefined') return null;
+      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
+      const ab = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({data: ab}).promise;
+      const page = await pdf.getPage(1);
+      const T = 800;
+      const vp0 = page.getViewport({scale: 1});
+      const scale = Math.min(T / vp0.width, T / vp0.height, 1);
+      const vp = page.getViewport({scale});
+      const c = document.createElement('canvas');
+      c.width = Math.round(vp.width); c.height = Math.round(vp.height);
+      await page.render({canvasContext: c.getContext('2d'), viewport: vp}).promise;
+      return c.toDataURL('image/jpeg', 0.7);
+    } catch { return null; }
   }
+  return new Promise(resolve => {
+    const img = new Image(), url = URL.createObjectURL(file);
+    img.onload = () => {
+      const T=800, s=Math.min(T/img.width,T/img.height,1);
+      const c = document.createElement('canvas');
+      c.width=Math.round(img.width*s); c.height=Math.round(img.height*s);
+      c.getContext('2d').drawImage(img,0,0,c.width,c.height);
+      URL.revokeObjectURL(url); resolve(c.toDataURL('image/jpeg',0.7));
+    };
+    img.onerror=()=>{ URL.revokeObjectURL(url); resolve(null); };
+    img.src=url;
+  });
 }
 
-function toggleHistSelectAll(cb) {
-  document.querySelectorAll('.hist-row-check').forEach(c => c.checked = cb.checked);
-  updateHistExportBtn();
+// ── MD5 ────────────────────────────────────────────────────────────
+function fileMD5(f) {
+  return new Promise((res,rej)=>{ const sp=new SparkMD5.ArrayBuffer(),r=new FileReader(); r.onload=e=>{sp.append(e.target.result);res(sp.end());}; r.onerror=rej; r.readAsArrayBuffer(f); });
 }
 
-async function exportHistSelected() {
-  const hashes = [...document.querySelectorAll('.hist-row-check:checked')]
-    .map(cb => cb.closest('tr')?.dataset.hash).filter(Boolean);
-  if (!hashes.length) { showToast('No items selected', 'error'); return; }
+// ── App ────────────────────────────────────────────────────────────
+createApp({
+  setup() {
+    const activeTab      = ref('upload');
+    const processing     = ref(false);
+    const dragging       = ref(false);
+    const globalDragging = ref(false);
+    const lightboxSrc    = ref('');
 
-  const btn = document.getElementById('hist-btn-export');
-  btn.disabled = true;
-  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Exporting…';
-  try {
-    const res = await fetch('/api/export', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ hashes })
+    // Storage (from server)
+    const storageUsage = ref(null);
+    async function refreshStorage() {
+      try { storageUsage.value = await apiGet('/storage'); } catch {}
+    }
+
+    // OCR health
+    const ocrHealth = ref(null);
+    async function checkHealth() {
+      try { ocrHealth.value = await apiGet('/health'); }
+      catch { ocrHealth.value = null; }
+    }
+
+    // Server config (read-only display + editable fields)
+    const serverCfg = ref(null);
+    const cfgEdit   = ref({ ocr_url: '', port: 8080 });
+    const cfgSaving = ref(false);
+    async function loadServerCfg() {
+      try {
+        serverCfg.value = await apiGet('/config');
+        cfgEdit.value = { ocr_url: serverCfg.value.ocr_url || '', port: serverCfg.value.port };
+      } catch {}
+    }
+    async function saveServerCfg() {
+      cfgSaving.value = true;
+      try {
+        const updated = await fetch('/config', {
+          method:'PATCH',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ ocr_url: cfgEdit.value.ocr_url || null, port: cfgEdit.value.port }),
+        });
+        if (!updated.ok) { const e=await updated.json(); throw new Error(e.detail||'Unknown error'); }
+        serverCfg.value = await updated.json();
+        toast('Config saved — port change takes effect on next restart', 'success');
+        checkHealth();
+      } catch(e) { toast('Config save failed: '+e.message, 'error'); }
+      finally { cfgSaving.value = false; }
+    }
+
+    // Toast
+    const toastMsg = ref(''); const toastSev = ref('info'); const toastShow = ref(false);
+    let toastTimer;
+    function toast(msg, sev='info') {
+      toastMsg.value=msg; toastSev.value=sev; toastShow.value=true;
+      clearTimeout(toastTimer); toastTimer=setTimeout(()=>toastShow.value=false, 3200);
+    }
+
+    const allRecords = ref([]);
+
+    // Upload — session results list (persists until user clears it)
+    const sessionResults = ref([]);
+    let _nextId = 0;
+
+    // Config
+    const defCfg = { serverUrl:window.location.origin, defaultRange:'3M', dateFormat:'DD/MM/YYYY', csvDelimiter:',', nameDate:true, nameCategory:true, nameMeal:false };
+    const cfg = ref({...defCfg});
+    function loadCfg() { try{ const s=localStorage.getItem('be-cfg'); if(s) Object.assign(cfg.value,JSON.parse(s)); }catch{} }
+    function saveCfg() { localStorage.setItem('be-cfg',JSON.stringify(cfg.value)); toast('Settings saved','success'); }
+
+    // Column visibility
+    const toggleCols = ref([
+      {field:'date',     header:'Date',     visible:true},
+      {field:'category', header:'Category', visible:true},
+      {field:'amount',   header:'Amount',   visible:true},
+      {field:'meal_type',header:'Meal',     visible:true},
+      {field:'time',     header:'Time',     visible:false},
+      {field:'added',    header:'Added on', visible:false},
+      {field:'filename', header:'Filename', visible:false},
+      {field:'status',   header:'Status',   visible:true},
+      {field:'ocr_text', header:'OCR text', visible:false},
+    ]);
+    const colOn = f => toggleCols.value.find(c=>c.field===f)?.visible ?? false;
+    watch(toggleCols, v => localStorage.setItem('be-cols', JSON.stringify(v.map(c=>({f:c.field,v:c.visible})))), {deep:true});
+    function loadCols() {
+      try {
+        const p=JSON.parse(localStorage.getItem('be-cols')||'[]');
+        if (!p.length) return;
+        // restore order and visibility
+        const ordered=[];
+        p.forEach(({f,v})=>{ const c=toggleCols.value.find(x=>x.field===f); if(c){c.visible=v;ordered.push(c);} });
+        toggleCols.value.forEach(c=>{ if(!ordered.includes(c)) ordered.push(c); }); // new cols not yet in storage
+        toggleCols.value=ordered;
+      } catch {}
+    }
+
+    // Column drag-to-reorder
+    const dragColIdx  = ref(-1);
+    const dragOverIdx = ref(-1);
+    function onColDragStart(idx) { dragColIdx.value=idx; }
+    function onColDragOver(idx) { dragOverIdx.value=idx; }
+    function onColDrop(idx) {
+      if (dragColIdx.value<0||dragColIdx.value===idx) return;
+      const cols=[...toggleCols.value];
+      const [moved]=cols.splice(dragColIdx.value,1);
+      cols.splice(idx,0,moved);
+      toggleCols.value=cols;
+      dragColIdx.value=-1; dragOverIdx.value=-1;
+    }
+    function onColDragEnd() { dragColIdx.value=-1; dragOverIdx.value=-1; }
+
+    function tdColStyle(field) {
+      if (field==='date')   return 'white-space:nowrap';
+      if (field==='amount') return 'white-space:nowrap';
+      if (field==='added')  return 'white-space:nowrap;color:#64748b;font-size:0.78rem';
+      return '';
+    }
+
+    // Date slider
+    const now = new Date();
+    const sliderMin   = ref(toMIdx(now) - 12);  // default: 1 year back; updated from actual data
+    const sliderMax   = ref(toMIdx(now));
+    const sliderRange = ref([sliderMax.value-3, sliderMax.value]);
+    const activePreset = ref('3M');
+    const sliderDragging = ref('');  // 'lo' | 'hi' | ''
+    const sliderTrack = ref(null);   // template ref
+
+    const sliderLeftPct  = computed(() => ((sliderRange.value[0]-sliderMin.value)/(sliderMax.value-sliderMin.value||1))*100);
+    const sliderRightPct = computed(() => ((sliderRange.value[1]-sliderMin.value)/(sliderMax.value-sliderMin.value||1))*100);
+    const sliderWidthPct = computed(() => sliderRightPct.value - sliderLeftPct.value);
+
+    function setSliderLo(v) { const n=Math.max(sliderMin.value, Math.min(+v, sliderRange.value[1])); sliderRange.value=[n, sliderRange.value[1]]; activePreset.value=''; }
+    function setSliderHi(v) { const n=Math.min(sliderMax.value, Math.max(+v, sliderRange.value[0])); sliderRange.value=[sliderRange.value[0], n]; activePreset.value=''; }
+
+    function _trackPct(e) {
+      const rect = sliderTrack.value.getBoundingClientRect();
+      return Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    }
+    function _pctToIdx(pct) {
+      return Math.round(sliderMin.value + pct * (sliderMax.value - sliderMin.value));
+    }
+    function startDrag(e, which) {
+      e.preventDefault();
+      sliderDragging.value = which;
+      const onMove = ev => {
+        const val = _pctToIdx(_trackPct(ev));
+        which === 'lo' ? setSliderLo(val) : setSliderHi(val);
+      };
+      const onUp = () => {
+        sliderDragging.value = '';
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+      };
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    }
+    function sliderTrackDown(e) {
+      // Move nearest thumb to click position
+      if (!sliderTrack.value) return;
+      const val = _pctToIdx(_trackPct(e));
+      const distLo = Math.abs(val - sliderRange.value[0]);
+      const distHi = Math.abs(val - sliderRange.value[1]);
+      startDrag(e, distLo <= distHi ? 'lo' : 'hi');
+    }
+
+    const datePresets = [{label:'1M',months:1,title:'Last 1 month'},{label:'3M',months:3,title:'Last 3 months'},{label:'6M',months:6,title:'Last 6 months'},{label:'YTD',ytd:true,title:'Year to Date'},{label:'All',all:true,title:'All records'}];
+    function applyPreset(p) {
+      activePreset.value = p.label;
+      let lo;
+      if      (p.all)  lo = sliderMin.value;
+      else if (p.ytd)  lo = Math.max(sliderMin.value, toMIdx(new Date(new Date().getFullYear(), 0, 1)));
+      else             lo = Math.max(sliderMin.value, sliderMax.value - p.months);
+      sliderRange.value = [lo, sliderMax.value];
+    }
+    function monthLabel(i) { const {year,month}=fromMIdx(i); return MON[month]+' '+year; }
+    function applyDefaultRange() { applyPreset(datePresets.find(x=>x.label===cfg.value.defaultRange)||datePresets[1]); }
+
+    watch(allRecords, recs => {
+      if (!recs.length) return;
+      let mn=toMIdx(now), mx=toMIdx(now);
+      recs.forEach(r=>{ const d=parseDate(r.result?.date); if(!d)return; const i=toMIdx(d); if(i<mn)mn=i; if(i>mx)mx=i; });
+      sliderMin.value=mn;
+      sliderMax.value=Math.max(mx, toMIdx(now));
+      // Re-apply active preset so range stays valid against new bounds.
+      // Without this, sliderRange[0] can be < sliderMin → leftPct goes negative → thumb flies off screen.
+      const activeP = activePreset.value && datePresets.find(p => p.label === activePreset.value);
+      if (activeP) applyPreset(activeP);
+      else sliderRange.value = [Math.max(mn, sliderRange.value[0]), Math.min(sliderMax.value, sliderRange.value[1])];
     });
-    if (!res.ok) throw new Error(await res.text());
-    const blob = await res.blob();
-    const url  = URL.createObjectURL(blob);
-    const a    = document.createElement('a');
-    a.href = url; a.download = 'bills_export.zip'; a.click();
-    URL.revokeObjectURL(url);
-    showToast(`Exported ${hashes.length} item${hashes.length !== 1 ? 's' : ''}`, 'success');
-  } catch (err) {
-    showToast('Export failed: ' + err.message, 'error');
-  } finally {
-    btn.disabled = false;
-    btn.innerHTML = '<i class="fa-solid fa-file-zipper"></i> Export Selected';
-    updateHistExportBtn();
-  }
-}
 
-// ─────────────────────────────────────────────────────────────
-// Toast
-// ─────────────────────────────────────────────────────────────
-let _toastTimer;
-function showToast(msg, type = 'info') {
-  const t = document.getElementById('toast');
-  t.className = `t-${type} show`;
-  t.textContent = msg;
-  clearTimeout(_toastTimer);
-  _toastTimer = setTimeout(() => t.classList.remove('show'), 3000);
-}
+    // Column filters
+    const filterOpen      = ref(false);
+    const filterCat       = ref('');
+    const filterDateFrom  = ref('');
+    const filterDateTo    = ref('');
+    const filterAmountOp  = ref('');
+    const filterAmountVal = ref('');
+    const activeFilterCount = computed(() =>
+      [filterCat.value, filterDateFrom.value, filterDateTo.value, filterAmountVal.value].filter(Boolean).length
+    );
+    function clearFilters() {
+      filterCat.value=''; filterDateFrom.value=''; filterDateTo.value='';
+      filterAmountOp.value=''; filterAmountVal.value='';
+    }
+
+    // Stage 1: date-slider filter
+    const sliderFiltered = computed(() => {
+      const [lo,hi]=sliderRange.value;
+      return allRecords.value.filter(r=>{ const d=parseDate(r.result?.date); if(!d)return true; const i=toMIdx(d); return i>=lo&&i<=hi; });
+    });
+
+    // Stage 2: column filters on top of slider
+    const visibleRecords = computed(() => {
+      let recs = sliderFiltered.value;
+      if (filterCat.value)
+        recs = recs.filter(r => (r.result?.category||'').toLowerCase() === filterCat.value);
+      if (filterDateFrom.value) {
+        const from = new Date(filterDateFrom.value).getTime();
+        recs = recs.filter(r => { const d=parseDate(r.result?.date); return d && d.getTime() >= from; });
+      }
+      if (filterDateTo.value) {
+        const to = new Date(filterDateTo.value).getTime() + 86399999;
+        recs = recs.filter(r => { const d=parseDate(r.result?.date); return d && d.getTime() <= to; });
+      }
+      if (filterAmountOp.value && filterAmountVal.value !== '') {
+        const threshold = parseFloat(filterAmountVal.value);
+        recs = recs.filter(r => {
+          const raw = r.result?.total_amount || r.result?.amount;
+          const amt = parseFloat(String(raw||'').replace(/[^\d.]/g,''));
+          if (isNaN(amt)||isNaN(threshold)) return true;
+          return filterAmountOp.value==='gte' ? amt>=threshold : amt<=threshold;
+        });
+      }
+      return recs;
+    });
+
+    // Thumbnail hover preview
+    const thumbHover = ref({ visible:false, src:'', top:0, left:0 });
+    function showThumbPreview(e, src) {
+      if (!src) return;
+      const rect = e.currentTarget.getBoundingClientRect();
+      const previewW = 560;
+      const left = rect.right + 10 + previewW > window.innerWidth
+        ? rect.left - previewW - 10
+        : rect.right + 10;
+      thumbHover.value = { visible:true, src, top: Math.max(8, rect.top), left };
+    }
+    function hideThumbPreview() { thumbHover.value.visible = false; }
+
+    // Sort
+    const sortField = ref('');
+    const sortDir   = ref('asc');
+    function toggleSort(field) {
+      if (sortField.value === field) sortDir.value = sortDir.value === 'asc' ? 'desc' : 'asc';
+      else { sortField.value = field; sortDir.value = 'asc'; }
+    }
+    const sortedRecords = computed(() => {
+      if (!sortField.value) return visibleRecords.value;
+      const dir = sortDir.value === 'asc' ? 1 : -1;
+      const f = sortField.value;
+      return [...visibleRecords.value].sort((a, b) => {
+        if (f === 'date') {
+          const da = parseDate(a.result?.date), db = parseDate(b.result?.date);
+          return dir * ((da?.getTime()||0) - (db?.getTime()||0));
+        }
+        if (f === 'amount') {
+          const amt = r => parseFloat(String(r.result?.total_amount||r.result?.amount||'0').replace(/[^\d.]/g,''))||0;
+          return dir * (amt(a) - amt(b));
+        }
+        if (f === 'added') {
+          return dir * (new Date(a.timestamp||0) - new Date(b.timestamp||0));
+        }
+        // String fields
+        const sv = { category: r => r.result?.category||'', meal_type: r => r.result?.meal_type||'',
+                     time: r => r.result?.time||'', status: r => r.action||'',
+                     filename: r => r.filename_generated||r.filename||'' };
+        const fn = sv[f]; if (!fn) return 0;
+        return dir * fn(a).localeCompare(fn(b));
+      });
+    });
+
+    // Pagination
+    const page      = ref(1);
+    const PER_PAGE  = 20;
+    const totalPages  = computed(() => Math.ceil(visibleRecords.value.length/PER_PAGE) || 1);
+    const pageRecords = computed(() => sortedRecords.value.slice((page.value-1)*PER_PAGE, page.value*PER_PAGE));
+    watch(visibleRecords, () => { if(page.value>totalPages.value) page.value=1; selectedHashes.value = new Set(); });
+
+    // History API helpers
+    async function loadHistory() {
+      try {
+        allRecords.value = await apiGet('/history');
+      } catch(e) { toast('Could not load history: '+e.message, 'error'); }
+    }
+
+    async function saveRecord(record, file) {
+      try {
+        const saved = await apiPostHistory(record, file);
+        const idx = allRecords.value.findIndex(r => r.hash === saved.hash);
+        if (idx !== -1) allRecords.value[idx] = saved;
+        else allRecords.value.push(saved);
+        return saved;
+      } catch(e) { toast('Could not save record: '+e.message, 'error'); return record; }
+    }
+
+    function downloadOriginal(rec) {
+      if (!rec.original_file) { toast('No original stored for this record', 'warn'); return; }
+      Object.assign(document.createElement('a'), {href:'/files/'+rec.original_file, download:rec.filename||rec.original_file}).click();
+    }
+
+    // Export / Import JSON
+    function exportJSON() {
+      const blob = new Blob([JSON.stringify(allRecords.value, null, 2)], {type:'application/json'});
+      const url = URL.createObjectURL(blob);
+      Object.assign(document.createElement('a'), {href:url, download:'bill-history.json'}).click();
+      URL.revokeObjectURL(url);
+    }
+    async function onImportJSON(e) {
+      const file = e.target.files[0]; if (!file) return;
+      try {
+        const text = await file.text();
+        const imported = JSON.parse(text);
+        if (!Array.isArray(imported)) { toast('Invalid history file', 'error'); return; }
+        const existing = new Set(allRecords.value.map(r => r.hash));
+        const newRecs = imported.filter(r => !existing.has(r.hash));
+        for (const rec of newRecs) await apiPostHistory(rec, null);
+        await loadHistory();
+        toast('Imported ' + newRecs.length + ' new records', 'success');
+      } catch(err) { toast('Import failed: ' + err.message, 'error'); }
+      e.target.value = '';
+    }
+
+    // Upload — all files, concurrent, newest on top, preserves existing cards
+    function onFileInput(e) { [...e.target.files].forEach(f => handleFile(f)); e.target.value=''; }
+
+    async function handleFile(file, forceProcess=false) {
+      let hash=''; try{ hash=await fileMD5(file); }catch{}
+
+      // Duplicate check — show inline card instead of blocking
+      if (hash && !forceProcess) {
+        const dup = allRecords.value.find(r => r.hash === hash);
+        if (dup) {
+          sessionResults.value.unshift({ _id:++_nextId, _status:'duplicate', _filename:file.name, _dupRecord:dup, _file:file, _hash:hash });
+          return;
+        }
+      }
+
+      // Add placeholder, then extract (non-blocking — other files can start immediately)
+      const id = ++_nextId;
+      sessionResults.value.unshift({ _id:id, _status:'processing', _filename:file.name });
+      doExtract(file, hash, id, forceProcess);  // intentionally not awaited
+    }
+
+    async function reprocessItem(item) {
+      item._status = 'processing';
+      doExtract(item._file, item._hash, item._id, true);
+    }
+
+    async function doExtract(file, hash, id, forceNew=false) {
+      const item = () => sessionResults.value.find(x => x._id === id);
+      try {
+        const thumb = await makeThumbnail(file);
+        const fd = new FormData(); fd.append('file', file);
+        const base = (cfg.value.serverUrl||'').replace(/\/$/,'');
+        const resp = await fetch(base+'/extract', {method:'POST', body:fd});
+        if (!resp.ok) { const e=await resp.json().catch(()=>({detail:resp.statusText})); throw new Error(e.detail||resp.statusText); }
+        const data = await resp.json();
+        const {ocr_text, status, ...result} = data;
+
+        const np=[]; const ext=file.name.split('.').pop();
+        if(cfg.value.nameDate     && result.date)      np.push(result.date.replace(/\//g,'-'));
+        if(cfg.value.nameCategory && result.category)  np.push(result.category);
+        if(cfg.value.nameMeal     && result.meal_type) np.push(result.meal_type);
+
+        // If reprocessing, delete old record first
+        if (forceNew && allRecords.value.find(r => r.hash === hash)) {
+          await apiDelete('/history/'+hash).catch(() => {});
+        }
+
+        const record = {hash, filename:file.name, filename_generated:np.length?np.join('_')+'.'+ext:file.name, thumbnail:thumb, ocr_text, result, correction:'', action:'', timestamp:new Date().toISOString()};
+        await saveRecord(record, file);
+        refreshStorage();
+
+        const card = item();
+        if (card) Object.assign(card, {...result, _id:id, _status:'ok', _filename:file.name, _hash:hash, _thumb:thumb, _correction:'', _file:file});
+      } catch(e) {
+        const card = item();
+        if (card) Object.assign(card, {_status:'error', _errorMsg:e.message});
+        else toast('Error: '+e.message, 'error');
+      }
+    }
+
+    function markItem(item, action) {
+      if (!item._hash) return;
+      const rec = allRecords.value.find(r => r.hash === item._hash);
+      if (rec) { rec.action = action; apiPostHistory({...rec}, null); }
+      toast('Marked as '+action, action==='good'?'success':'warn');
+    }
+    async function saveItemCorrection(item) {
+      if (!item._hash) return;
+      const rec = allRecords.value.find(r => r.hash === item._hash);
+      if (rec) { rec.correction = item._correction; await apiPostHistory({...rec}, null); }
+      toast('Correction saved', 'success');
+    }
+    function downloadRenamedItem(item) {
+      if (!item._file) return;
+      const np=[]; if(cfg.value.nameDate&&item.date)np.push(item.date.replace(/\//g,'-')); if(cfg.value.nameCategory&&item.category)np.push(item.category); if(cfg.value.nameMeal&&item.meal_type)np.push(item.meal_type);
+      const ext=item._file.name.split('.').pop(); const name=np.length?np.join('_')+'.'+ext:item._file.name;
+      const url=URL.createObjectURL(item._file); Object.assign(document.createElement('a'),{href:url,download:name}).click(); URL.revokeObjectURL(url);
+    }
+
+    // Selection state (using a ref-wrapped Set so Vue tracks mutations)
+    const selectedHashes = ref(new Set());
+
+    const allPageSelected = computed(() =>
+      pageRecords.value.length > 0 && pageRecords.value.every(r => selectedHashes.value.has(r.hash))
+    );
+
+    function toggleSelect(hash) {
+      const s = new Set(selectedHashes.value);
+      s.has(hash) ? s.delete(hash) : s.add(hash);
+      selectedHashes.value = s;
+    }
+
+    function toggleSelectPage(e) {
+      const s = new Set(selectedHashes.value);
+      if (e.target.checked) pageRecords.value.forEach(r => s.add(r.hash));
+      else                  pageRecords.value.forEach(r => s.delete(r.hash));
+      selectedHashes.value = s;
+    }
+
+    async function deleteSelected() {
+      const toDelete = [...selectedHashes.value];
+      for (const h of toDelete) await apiDelete('/history/'+h).catch(()=>{});
+      allRecords.value = allRecords.value.filter(r => !selectedHashes.value.has(r.hash));
+      selectedHashes.value = new Set();
+      toast(`Deleted ${toDelete.length} record${toDelete.length===1?'':'s'}`, 'info');
+      refreshStorage();
+    }
+
+    async function resetHistory() {
+      if (!confirm(`Delete all ${allRecords.value.length} records? This cannot be undone.`)) return;
+      for (const rec of allRecords.value) await apiDelete('/history/'+rec.hash).catch(()=>{});
+      allRecords.value = [];
+      selectedHashes.value = new Set();
+      toast('History cleared', 'info');
+      refreshStorage();
+    }
+
+    // Edit dialog
+    const editVisible=ref(false); const editRec=ref(null); const editIdx=ref(-1);
+    function openEdit(rec) { editIdx.value=allRecords.value.findIndex(r=>r.hash===rec.hash); editRec.value={...rec}; editVisible.value=true; }
+    async function saveEdit() {
+      if(editIdx.value===-1) return;
+      const rec = allRecords.value[editIdx.value];
+      rec.correction = editRec.value.correction; rec.action = editRec.value.action;
+      await apiPostHistory({...rec}, null);
+      editVisible.value=false; toast('Record updated','success');
+    }
+    async function deleteRec(rec) {
+      try {
+        await apiDelete('/history/'+rec.hash);
+        const i=allRecords.value.findIndex(r=>r.hash===rec.hash);
+        if(i!==-1) allRecords.value.splice(i,1);
+        toast('Record deleted','info'); refreshStorage();
+      } catch(e) { toast('Delete failed: '+e.message,'error'); }
+    }
+
+    // CSV export
+    function exportCSV() {
+      const d=cfg.value.csvDelimiter||',', qs=v=>'"'+String(v??'').replace(/"/g,'""')+'"';
+      const hdrs=['date','time','category','meal_type','total_amount','currency','from_location','to_location','hotel_name','filename','status','correction','timestamp'];
+      const lines=[hdrs.join(d)];
+      visibleRecords.value.forEach(r=>{const x=r.result||{};lines.push([x.date||'',x.time||'',x.category||'',x.meal_type||'',x.total_amount||x.amount||'',x.currency||'',x.from_location||'',x.to_location||'',x.hotel_name||'',r.filename||'',r.action||'',r.correction||'',r.timestamp||''].map(qs).join(d));});
+      const blob=new Blob([lines.join('\n')],{type:'text/csv'}); const url=URL.createObjectURL(blob);
+      Object.assign(document.createElement('a'),{href:url,download:'bill-export.csv'}).click(); URL.revokeObjectURL(url);
+    }
+
+    // Helpers
+    const CURR={INR:'₹',USD:'$',EUR:'€',GBP:'£'};
+    const CATS={food:'🍽',travel:'✈',hotel:'🏨'};
+    const fmtAmt=r=>{ if(!r)return'—'; const a=r.total_amount||r.amount; if(!a)return'—'; return(CURR[r.currency]||r.currency||'')+a; };
+    const catClass=c=>{ const m={food:'cat-pill cat-food',travel:'cat-pill cat-travel',hotel:'cat-pill cat-hotel'}; return m[(c||'').toLowerCase()]||'cat-pill cat-other'; };
+    const catIcon=c=>CATS[(c||'').toLowerCase()]||'📄';
+    const badgeClass=a=>a==='good'?'badge-good':a==='bad'?'badge-bad':'badge-none';
+    const fmtTs=ts=>{ if(!ts)return''; try{return new Date(ts).toLocaleDateString();}catch{return ts;} };
+    const fmtBytes=b=>{ if(!b)return'0 B'; if(b<1024*1024)return(b/1024).toFixed(1)+' KB'; if(b<1024**3)return(b/1024/1024).toFixed(1)+' MB'; return(b/1024**3).toFixed(2)+' GB'; };
+
+    onMounted(async () => {
+      loadCfg(); loadCols();
+
+      // Global drag-and-drop — accepts files dropped anywhere on the page
+      let _dragHideTimer;
+      document.addEventListener('dragover', e => {
+        e.preventDefault();
+        if (!e.dataTransfer?.types.includes('Files')) return;
+        globalDragging.value = true;
+        clearTimeout(_dragHideTimer);
+        _dragHideTimer = setTimeout(() => { globalDragging.value = false; }, 200);
+      });
+      document.addEventListener('dragleave', e => {
+        if (e.relatedTarget === null) {
+          clearTimeout(_dragHideTimer);
+          globalDragging.value = false;
+        }
+      });
+      document.addEventListener('drop', e => {
+        e.preventDefault();
+        clearTimeout(_dragHideTimer);
+        globalDragging.value = false;
+        dragging.value = false;
+        const files = [...(e.dataTransfer?.files || [])].filter(
+          f => f.type.startsWith('image/') || f.type === 'application/pdf'
+        );
+        files.forEach(f => handleFile(f));
+      });
+
+      await loadHistory();
+      applyDefaultRange();
+      refreshStorage();
+      checkHealth();
+      loadServerCfg();
+    });
+
+    return {
+      activeTab,processing,dragging,globalDragging,lightboxSrc,
+      toastMsg,toastSev,toastShow,
+      allRecords,visibleRecords,pageRecords,page,totalPages,
+      sessionResults,
+      cfg,saveCfg,
+      toggleCols,colOn,dragColIdx,dragOverIdx,onColDragStart,onColDragOver,onColDrop,onColDragEnd,tdColStyle,
+      sliderMin,sliderMax,sliderRange,sliderLeftPct,sliderRightPct,sliderWidthPct,sliderDragging,sliderTrack,
+      startDrag,sliderTrackDown,setSliderLo,setSliderHi,monthLabel,activePreset,datePresets,applyPreset,
+      sortField,sortDir,toggleSort,
+      loadHistory,downloadOriginal,
+      onFileInput,
+      markItem,saveItemCorrection,downloadRenamedItem,reprocessItem,
+      filterOpen,filterCat,filterDateFrom,filterDateTo,filterAmountOp,filterAmountVal,activeFilterCount,clearFilters,
+      thumbHover,showThumbPreview,hideThumbPreview,
+      selectedHashes,allPageSelected,toggleSelect,toggleSelectPage,deleteSelected,resetHistory,
+      editVisible,editRec,openEdit,saveEdit,deleteRec,
+      exportCSV,exportJSON,onImportJSON,
+      fmtAmt,catClass,catIcon,badgeClass,fmtTs,fmtBytes,
+      storageUsage,ocrHealth,checkHealth,serverCfg,cfgEdit,cfgSaving,saveServerCfg,
+    };
+  }
+}).mount('#app');
 </script>
 </body>
 </html>
