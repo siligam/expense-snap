@@ -62,20 +62,20 @@ uv pip install -e .
 > ```
 > `torch` and `torchvision` must always come from the same index.
 
-### 3. Download the models (one-time setup)
+### 3. Initialise (one-time)
 
-This downloads the DocTR OCR models and Qwen2.5-1.5B-Instruct weights (~3.5 GB total) for offline use:
+Downloads both models and creates the data directory (~3.5 GB):
 
 ```bash
-bill-extractor-download
+bill-extractor init
 ```
 
-Run this once. After the first download the app runs fully offline.
+Safe to re-run — already-cached files are skipped automatically.
 
 ### 4. Start the web app
 
 ```bash
-bill-extractor
+bill-extractor serve
 ```
 
 Open your browser at **http://localhost:8080**
@@ -143,10 +143,10 @@ bill_extractor/
 
 | Command | Description |
 |---------|-------------|
-| `bill-extractor` or `bill-extractor serve` | Start the web app on port 8080 |
+| `bill-extractor init` | Download models and initialise data directory (run once after install) |
+| `bill-extractor serve` | Start the web app on port 8080 |
 | `bill-extractor serve --headless` | OCR endpoint only (no UI, for GPU servers) |
 | `bill-extractor extract <file>` | Extract a single file from the terminal |
-| `bill-extractor-download` | Download all models for offline use |
 
 ---
 

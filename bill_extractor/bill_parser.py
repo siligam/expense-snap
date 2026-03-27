@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import os
-os.environ["HF_HUB_OFFLINE"] = "1"
 os.environ["TRANSFORMERS_VERBOSITY"] = "error"
 
 import json

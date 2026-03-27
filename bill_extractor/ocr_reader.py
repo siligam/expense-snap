@@ -5,7 +5,14 @@ import re
 from doctr.io import DocumentFile
 from doctr.models import ocr_predictor
 
-model = ocr_predictor(pretrained=True)
+_model = None
+
+
+def _get_model():
+    global _model
+    if _model is None:
+        _model = ocr_predictor(pretrained=True)
+    return _model
 
 # ---------------------------------------------------------------------------
 # Noise patterns common on Indian receipts that carry no useful expense data
@@ -93,19 +100,19 @@ def correct_ocr_errors(lines: list[str]) -> list[str]:
 
 def readimage(image_path: str) -> dict:
     doc = DocumentFile.from_images(image_path)
-    result = model(doc)
+    result = _get_model()(doc)
     return result.export()
 
 
 def readpdf(pdf_path: str) -> dict:
     doc = DocumentFile.from_pdf(pdf_path)
-    result = model(doc)
+    result = _get_model()(doc)
     return result.export()
 
 
 def readimages(*image_paths: str) -> dict:
     doc = DocumentFile.from_images(*image_paths)
-    result = model(doc)
+    result = _get_model()(doc)
     return result.export()
 
 

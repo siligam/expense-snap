@@ -538,11 +538,18 @@ def main():
     extract_p.add_argument("file", help="Path to image or PDF")
     extract_p.add_argument("--server", default=None, help="Remote server URL")
 
+    sub.add_parser("init", help="Download models and initialise data directory (run once after install)")
+
     args = parser.parse_args()
 
     if args.cmd == "extract":
         import sys
         _run_extract_cmd(args.file, args.server)
+        sys.exit(0)
+
+    if args.cmd == "init":
+        import sys
+        _run_init_cmd()
         sys.exit(0)
 
     # Default: serve
@@ -572,6 +579,44 @@ def main():
     target_app = create_app(headless=headless, cfg=cfg)
     log_cfg = _build_uvicorn_log_config(cfg.history_file.parent / "bill_extractor.log")
     uvicorn.run(target_app, host="0.0.0.0", port=cfg.port, reload=False, log_config=log_cfg)
+
+
+def _run_init_cmd() -> None:
+    """Download models and create data directory. Safe to re-run."""
+    import subprocess, sys
+
+    print("bill-extractor init")
+    print("=" * 40)
+
+    # 1. Config + directories (in-process — no model loading involved)
+    print("\n[1/3] Initialising configuration…")
+    cfg = load_config()
+    cfg.files_dir.mkdir(parents=True, exist_ok=True)
+    print(f"      data dir : {cfg.data_dir}")
+    print(f"      history  : {cfg.history_file.name}")
+    print(f"      files    : {cfg.files_dir.name}/")
+
+    # 2+3. Run the download script in a subprocess.
+    #
+    # bill_parser.py sets HF_HUB_OFFLINE in the environment before anything
+    # imports huggingface_hub. Once that library is imported its offline flag
+    # is cached as a Python bool — no in-process override is reliable. A fresh
+    # subprocess never imports bill_parser, so HF_HUB_OFFLINE is never set and
+    # downloads proceed normally. This is exactly what `uv run python
+    # download_models.py` does when called manually.
+    print("\n[2/3] Downloading OCR models (DocTR)…")
+    print("[3/3] Downloading LLM (Qwen2.5-1.5B-Instruct)…")
+    print("      (progress shown below)\n")
+
+    download_script = Path(__file__).parent / "download_models.py"
+    result = subprocess.run([sys.executable, str(download_script)])
+    if result.returncode != 0:
+        print("\nDownload failed — check the output above for details.", file=sys.stderr)
+        sys.exit(result.returncode)
+
+    print("\n" + "=" * 40)
+    print("Setup complete. Start the app with:\n")
+    print("    bill-extractor serve\n")
 
 
 def _run_extract_cmd(file_path: str, server_url: str | None) -> None:

@@ -41,8 +41,7 @@ yaml = [
 ]
 
 [project.scripts]
-bill-extractor          = "bill_extractor.app:main"
-bill-extractor-download = "bill_extractor.download_models:download"
+bill-extractor = "bill_extractor.app:main"
 
 [tool.setuptools.packages.find]
 where = ["."]

@@ -59,25 +59,51 @@ uv pip install -e .
     pip install -e .
     ```
 
-### 3. Download the models (one-time)
+### 3. Initialise (one-time)
 
-This downloads DocTR OCR weights and Qwen2.5-1.5B-Instruct (~3.5 GB total) for offline use:
+Downloads both models and creates the data directory:
 
 ```bash
-bill-extractor-download
+bill-extractor init
 ```
 
-Run this once. After the first download the app runs fully offline.
+```
+bill-extractor init
+========================================
+
+[1/3] Initialising configuration…
+      data dir : /home/you/.bill_extractor
+      history  : history.json
+      files    : files/
+
+[2/3] Downloading OCR models (DocTR)…
+      done.
+
+[3/3] Downloading LLM (Qwen2.5-1.5B-Instruct)…
+      tokenizer done.
+      weights done.
+
+========================================
+Setup complete. Start the app with:
+
+    bill-extractor serve
+```
+
+~3.5 GB total. After this the app runs fully offline. Safe to re-run — already-cached files are skipped automatically.
 
 ### 4. Start the app
 
 ```bash
-bill-extractor
+bill-extractor serve
 ```
 
 The server starts on **http://localhost:8080** and opens your browser automatically.
 
 ---
+
+!!! tip
+    `bill-extractor init` is safe to re-run at any time. If models are already cached
+    it completes in seconds with no re-download.
 
 ## Running on a GPU server (headless)
 

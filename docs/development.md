@@ -45,13 +45,13 @@ All tests use `tmp_path` fixtures — nothing is written to `~/.bill_extractor` 
 ```
 bill_extractor/
 ├── __init__.py          package version (0.5.0)
-├── app.py               FastAPI application, CLI entry point
+├── app.py               FastAPI application + CLI (serve / init / extract)
 ├── bill_examples.py     few-shot OCR examples for LLM prompts
 ├── bill_parser.py       LLM-based field extraction (DocTR + Qwen2.5)
 ├── config.py            Config dataclass + load_config()
-├── download_models.py   one-time model download script
+├── download_models.py   legacy download helper (superseded by bill-extractor init)
 ├── history.py           HistoryStore — thread-safe CRUD + atomic writes
-├── ocr_reader.py        DocTR OCR wrapper
+├── ocr_reader.py        DocTR OCR wrapper (lazy model load)
 └── templates/
     └── index.html       Vue 3 single-page web UI (~1500 lines)
 
