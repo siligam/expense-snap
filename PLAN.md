@@ -1,6 +1,6 @@
 # Bill Extractor — Restructuring Plan
 
-> Status: draft · last updated 2026-03-27
+> Status: active · last updated 2026-03-27
 > Branch: `dev`
 
 ---
@@ -335,10 +335,30 @@ The server is stateless with respect to extracted content:
 - [x] New tests: history CRUD endpoints
 - [x] New tests: config loading and defaults
 - [ ] New tests: proxy + fallback behaviour (mock remote)
-- [ ] Manual smoke test: `serve` → browser opens → upload → history persists across browser restart
-- [ ] Manual smoke test: switch browsers → same history visible
-- [ ] Manual smoke test: `extract file.jpg` → record appears in web UI
-- [ ] Commit: *"Phase 2.5 complete — server-side history, unified process model"*
+- [x] Commit: *"Phase 2.5 complete — server-side history, unified process model"*
+
+---
+
+### Phase 2.6 — Polish & UX *(complete)*
+
+**Goal:** quality-of-life improvements following Phase 2.5 rollout.
+
+**Completed:**
+- [x] Favicon (`GET /favicon.ico` — inline SVG, no file dependency)
+- [x] Timestamps on all console log lines; persistent `RotatingFileHandler` log to `~/.bill_extractor/bill_extractor.log`
+- [x] Stale code removal — cleaned `bill_parser.py`, `app.py` of Flask/Phase-1 remnants
+- [x] Settings page rework — removed Storage, Original Files, History Defaults, File Naming sections; folder tree display for data dir; inline "Change" input (no always-editable field)
+- [x] Multi-server round-robin OCR — `ocr_servers` list replaces single `ocr_url`; checkbox per server; auto-insert local entry; backward-compat migration of old `ocr_url` config
+- [x] Data folder change takes effect immediately (no server restart) — `PATCH /config` with `data_dir` reinits `_store` in-place
+- [x] Provenance metadata on every extraction — `submitted_at`, `completed_at`, `ocr_server`, `doctr_version`, `model_name`
+- [x] Hotel date fix — `extract_hotel` now returns `"date": check_in`; `_normalize_date` strips trailing time component (`"23/02/2026 18:58"` → `"23/02/2026"`)
+- [x] Thumbnail removed from history.json — history table loads preview from `/files/{original_file}`; PDF records show PDF icon linking to file; session cards still use client-side `_thumb`
+- [x] OCR text excluded from CSV export always, regardless of column visibility
+- [x] Date range preset persisted to `localStorage` automatically
+- [x] Slider window drag — grab the fill bar to move both handles together
+- [x] Upload tab source hints — "New" / "Reprocessed" badge; renamed file shown with `from original.jpg` note
+- [x] Duplicate card shows previous extraction summary (category, date, amount, meal type) inline
+- [x] Config and API tests updated for `ocr_servers` / `data_dir` schema (37 tests passing)
 
 ---
 

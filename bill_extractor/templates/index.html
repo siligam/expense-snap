@@ -203,6 +203,15 @@
     .cat-hotel  { background: #fce7f3; color: #831843; }
     .cat-other  { background: #f1f5f9; color: #475569; }
 
+    /* Source badge */
+    .src-badge {
+      font-size: 0.63rem; font-weight: 700; padding: 2px 8px;
+      border-radius: 20px; display: inline-block;
+      text-transform: uppercase; letter-spacing: 0.3px;
+    }
+    .src-new         { background: #dcfce7; color: #166534; }
+    .src-reprocessed { background: #dbeafe; color: #1e40af; }
+
     /* Thumbnail */
     .thumb { width: 80px; height: 80px; object-fit: cover; border-radius: 6px; border: 1px solid #e2e8f0; cursor: zoom-in; }
     .thumb-ph {
@@ -223,7 +232,8 @@
     /* ── Date slider ────────────────────────────── */
     .slider-wrap { position: relative; height: 28px; margin: 10px 0; cursor: pointer; }
     .slider-track { position: absolute; top: 50%; transform: translateY(-50%); left: 0; right: 0; height: 4px; background: #e2e8f0; border-radius: 2px; }
-    .slider-fill  { position: absolute; top: 50%; transform: translateY(-50%); height: 4px; background: #3b82f6; border-radius: 2px; }
+    .slider-fill  { position: absolute; top: 50%; transform: translateY(-50%); height: 8px; background: #3b82f6; border-radius: 4px; cursor: grab; }
+    .slider-fill:active { cursor: grabbing; }
     .slider-thumb {
       position: absolute; top: 50%; width: 18px; height: 18px;
       background: #fff; border: 2px solid #3b82f6; border-radius: 50%;
@@ -422,9 +432,23 @@
 
           <!-- DUPLICATE state -->
           <div v-else-if="item._status==='duplicate'">
-            <div class="flex items-center g2" style="color:#92400e;font-size:0.88rem;margin-bottom:0.5rem">
+            <div class="flex items-center g2" style="color:#92400e;font-size:0.88rem;margin-bottom:0.75rem">
               <i class="pi pi-exclamation-triangle" style="flex-shrink:0"></i>
-              <span><strong>{{ item._filename }}</strong> — already processed on {{ fmtTs(item._dupRecord.timestamp) }}</span>
+              <div>
+                <strong>{{ item._filename }}</strong> — already processed on {{ fmtTs(item._dupRecord.timestamp) }}
+                <div v-if="item._dupRecord.filename_generated && item._dupRecord.filename_generated !== item._filename"
+                     style="font-size:0.72rem;color:#b45309;margin-top:2px">
+                  saved as <em>{{ item._dupRecord.filename_generated }}</em>
+                </div>
+              </div>
+            </div>
+            <div v-if="item._dupRecord.result" class="flex g3 flex-wrap" style="margin-bottom:0.75rem;padding:8px 10px;background:#fefce8;border-radius:6px;border:1px solid #fde68a">
+              <span :class="catClass(item._dupRecord.result.category)" style="align-self:center">
+                {{ catIcon(item._dupRecord.result.category) }} {{ item._dupRecord.result.category || '—' }}
+              </span>
+              <div v-if="item._dupRecord.result.date"><div class="fl">Date</div><div class="fv">{{ item._dupRecord.result.date }}</div></div>
+              <div v-if="item._dupRecord.result.total_amount || item._dupRecord.result.amount"><div class="fl">Amount</div><div class="fv" style="color:#16a34a;font-weight:700">{{ fmtAmt(item._dupRecord.result) }}</div></div>
+              <div v-if="item._dupRecord.result.meal_type"><div class="fl">Meal</div><div class="fv">{{ item._dupRecord.result.meal_type }}</div></div>
             </div>
             <div class="flex g2">
               <button class="btn btn-secondary btn-sm" @click="activeTab='history'">
@@ -439,7 +463,16 @@
           <!-- OK state -->
           <div v-else-if="item._status==='ok'">
             <div class="flex items-center justify-between flex-wrap g2 mb2">
-              <span style="font-size:0.82rem;color:#64748b;word-break:break-all">{{ item._filename }}</span>
+              <div>
+                <div class="flex items-center g2 flex-wrap">
+                  <span style="font-size:0.82rem;color:#1e293b;word-break:break-all;font-weight:500">{{ item._filename_generated || item._filename }}</span>
+                  <span class="src-badge" :class="item._source==='reprocessed'?'src-reprocessed':'src-new'">{{ item._source==='reprocessed'?'Reprocessed':'New' }}</span>
+                </div>
+                <div v-if="item._filename_generated && item._filename_generated !== item._filename"
+                     style="font-size:0.68rem;color:#94a3b8;font-style:italic;margin-top:2px">
+                  from {{ item._filename }}
+                </div>
+              </div>
               <div class="flex g2">
                 <button class="btn btn-success btn-sm" @click="markItem(item,'good')">
                   <i class="pi pi-thumbs-up"></i> Good
@@ -520,7 +553,8 @@
           <div ref="sliderTrack" class="slider-wrap" style="margin:8px 0;cursor:default;user-select:none"
                @mousedown="sliderTrackDown($event)">
             <div class="slider-track"></div>
-            <div class="slider-fill" :style="{left:sliderLeftPct+'%', width:sliderWidthPct+'%'}"></div>
+            <div class="slider-fill" :style="{left:sliderLeftPct+'%', width:sliderWidthPct+'%',cursor:sliderDragging==='win'?'grabbing':'grab'}"
+                 @mousedown.stop="startDragWindow($event)"></div>
             <div class="slider-thumb" :style="{left:sliderLeftPct+'%',zIndex:sliderDragging==='lo'?4:2}"
                  @mousedown.stop="startDrag($event,'lo')"></div>
             <div class="slider-thumb" :style="{left:sliderRightPct+'%',zIndex:sliderDragging==='hi'?4:2}"
@@ -681,13 +715,20 @@
                 </td>
                 <!-- Thumbnail — first data column, hover to preview -->
                 <td style="width:68px;padding:6px 8px">
-                  <div v-if="rec.thumbnail"
-                       @mouseenter="showThumbPreview($event, rec.thumbnail)"
-                       @mouseleave="hideThumbPreview"
-                       @click="lightboxSrc=rec.thumbnail"
-                       style="cursor:zoom-in">
-                    <img :src="rec.thumbnail" style="width:60px;height:60px;object-fit:cover;border-radius:5px;border:1px solid #e2e8f0;display:block" />
-                  </div>
+                  <template v-if="rec.original_file">
+                    <div v-if="rec.original_file.endsWith('.pdf')"
+                         @click="window.open('/files/'+rec.original_file,'_blank')"
+                         style="cursor:pointer;width:60px;height:60px;display:flex;align-items:center;justify-content:center;border-radius:5px;border:1px solid #e2e8f0;background:#f8fafc">
+                      <i class="pi pi-file-pdf" style="font-size:1.5rem;color:#ef4444"></i>
+                    </div>
+                    <div v-else
+                         @mouseenter="showThumbPreview($event, '/files/'+rec.original_file)"
+                         @mouseleave="hideThumbPreview"
+                         @click="lightboxSrc='/files/'+rec.original_file"
+                         style="cursor:zoom-in">
+                      <img :src="'/files/'+rec.original_file" style="width:60px;height:60px;object-fit:cover;border-radius:5px;border:1px solid #e2e8f0;display:block" />
+                    </div>
+                  </template>
                   <div v-else class="ht-ph" style="width:60px;height:60px">
                     <i class="pi pi-image" style="font-size:1rem"></i>
                   </div>
@@ -733,75 +774,74 @@
       <div class="card">
 
         <div class="sec-label">Server config</div>
-        <div v-if="serverCfg" style="font-size:0.82rem;color:#64748b;margin-bottom:0.75rem;display:grid;gap:4px">
-          <div><span style="font-weight:600;color:#374151">History file:</span>
-            <code style="background:#f1f5f9;border-radius:4px;padding:1px 5px;font-size:0.78rem;margin-left:4px">{{ serverCfg.history_file }}</code></div>
-          <div><span style="font-weight:600;color:#374151">Files dir:</span>
-            <code style="background:#f1f5f9;border-radius:4px;padding:1px 5px;font-size:0.78rem;margin-left:4px">{{ serverCfg.files_dir }}</code></div>
-        </div>
-        <div class="settings-grid" style="margin-bottom:0.5rem">
-          <div>
-            <label class="form-label">Remote OCR URL</label>
-            <input class="form-input" v-model="cfgEdit.ocr_url" placeholder="null — use local models" />
-            <div style="font-size:0.75rem;color:#64748b;margin-top:4px">
-              Leave blank to use local models. Set to a headless server URL to proxy OCR there.
+        <div style="margin-bottom:1rem">
+          <label class="form-label">Cache folder</label>
+          <!-- Folder tree — always visible -->
+          <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:10px 14px;margin-bottom:8px;font-size:0.82rem">
+            <div v-if="cfgEdit.data_dir" style="font-family:monospace;color:#1e293b;font-weight:600;margin-bottom:6px;word-break:break-all">{{ cfgEdit.data_dir }}</div>
+            <div v-else style="color:#94a3b8;margin-bottom:6px;font-size:0.78rem">Loading…</div>
+            <table style="border-collapse:collapse;font-size:0.8rem;color:#64748b;padding-left:0.5rem">
+              <tr><td style="font-family:monospace;color:#cbd5e1;padding-right:4px;white-space:nowrap">├─</td><td style="font-family:monospace;padding-right:12px;white-space:nowrap">history.json</td><td style="color:#94a3b8">history database</td></tr>
+              <tr><td style="font-family:monospace;color:#cbd5e1;padding-right:4px;white-space:nowrap">├─</td><td style="font-family:monospace;padding-right:12px;white-space:nowrap">files/</td><td style="color:#94a3b8">renamed original receipts</td></tr>
+              <tr><td style="font-family:monospace;color:#cbd5e1;padding-right:4px;white-space:nowrap">└─</td><td style="font-family:monospace;padding-right:12px;white-space:nowrap">bill_extractor.log</td><td style="color:#94a3b8">server log</td></tr>
+            </table>
+          </div>
+          <!-- Change folder -->
+          <div v-if="!dataDirEditing">
+            <button class="btn btn-secondary btn-sm" @click="dataDirEditing=true">
+              <i class="pi pi-folder-open"></i> Change folder
+            </button>
+          </div>
+          <div v-else>
+            <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">
+              <input class="form-input" v-model="cfgEdit.data_dir"
+                     style="font-family:monospace;font-size:0.82rem;flex:1"
+                     @keydown.escape="cancelDirEdit" />
+              <button class="btn btn-ghost btn-sm" @click="cancelDirEdit" style="flex-shrink:0">Cancel</button>
+            </div>
+            <div style="font-size:0.75rem;color:#d97706">
+              ⚠ Existing data stays at the old location — copy files/ and history.json manually if needed.
             </div>
           </div>
-          <div>
-            <label class="form-label">Server port</label>
-            <input class="form-input" type="number" v-model.number="cfgEdit.port" placeholder="8080" style="width:100px" />
-            <div style="font-size:0.75rem;color:#64748b;margin-top:4px">Takes effect on next restart.</div>
+        </div>
+
+        <div class="sec-label">OCR servers</div>
+        <div style="margin-bottom:0.5rem">
+          <div v-for="(srv, i) in cfgEdit.ocr_servers" :key="i"
+               style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+            <input type="checkbox" v-model="srv.enabled" style="flex-shrink:0;width:15px;height:15px;cursor:pointer" />
+            <span v-if="srv.url==='local'" style="flex:1;font-size:0.85rem;color:#374151">
+              Local (on-device)
+            </span>
+            <input v-else class="form-input" style="flex:1;font-size:0.82rem;font-family:monospace"
+                   v-model="srv.url" placeholder="http://server:8080" />
+            <span style="font-size:0.75rem;width:70px;flex-shrink:0"
+                  :style="{color: srv.url==='local' ? (ocrHealth?.model_loaded ? '#16a34a' : '#94a3b8') : '#94a3b8'}">
+              {{ srv.url==='local' ? (ocrHealth?.model_loaded ? '● online' : '○ offline') : '○ unknown' }}
+            </span>
+            <button v-if="srv.url!=='local'" class="btn btn-ghost btn-sm" @click="removeServer(i)"
+                    title="Remove server" style="padding:2px 6px;color:#ef4444">✕</button>
+          </div>
+          <div style="display:flex;gap:6px;margin-top:10px">
+            <input class="form-input" v-model="newServerUrl" placeholder="http://server:8080"
+                   style="flex:1;font-family:monospace;font-size:0.82rem"
+                   @keydown.enter="addServer" />
+            <button class="btn btn-secondary btn-sm" @click="addServer" :disabled="!newServerUrl.trim()">
+              <i class="pi pi-plus"></i> Add
+            </button>
+          </div>
+          <div style="font-size:0.75rem;color:#64748b;margin-top:6px">
+            Multiple enabled servers share the workload (round-robin with fallback).
           </div>
         </div>
         <div style="font-size:0.8rem;display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap;margin-bottom:0.75rem">
           <span v-if="ocrHealth===null" style="color:#94a3b8">⊙ Status unknown</span>
           <span v-else-if="ocrHealth.model_loaded" style="color:#16a34a">✓ Models loaded — running locally</span>
           <span v-else style="color:#d97706">⚠ Remote OCR mode — models not loaded locally</span>
-          <button class="btn btn-ghost btn-sm" @click="checkHealth"><i class="pi pi-refresh"></i></button>
+          <button class="btn btn-ghost btn-sm" @click="checkHealth" title="Refresh status"><i class="pi pi-refresh"></i></button>
           <button class="btn btn-secondary btn-sm" @click="saveServerCfg" :disabled="cfgSaving">
             <i class="pi pi-save"></i> Apply config
           </button>
-        </div>
-
-        <div class="sec-label">Storage</div>
-        <div v-if="storageUsage" style="font-size:0.8rem;margin-bottom:0.75rem;display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap">
-          <span style="color:#64748b">
-            Disk used:
-            <strong style="color:#1e293b">{{ fmtBytes(storageUsage.total_bytes) }}</strong>
-            (history: {{ fmtBytes(storageUsage.history_bytes) }}, files: {{ fmtBytes(storageUsage.files_bytes) }})
-          </span>
-          <span v-if="storageUsage.total_bytes > 200*1024*1024"
-                style="background:#fef3c7;color:#92400e;border:1px solid #fcd34d;border-radius:5px;padding:2px 8px;font-size:0.75rem">
-            ⚠ Over 200 MB — consider exporting a backup
-          </span>
-        </div>
-        <div v-else style="font-size:0.8rem;color:#94a3b8;margin-bottom:0.75rem">
-          Calculating storage…
-        </div>
-        <div class="flex items-center g2 flex-wrap">
-          <button class="btn btn-secondary btn-sm" @click="exportJSON">
-            <i class="pi pi-download"></i> Export JSON backup
-          </button>
-          <button class="btn btn-secondary btn-sm" @click="$refs.jsonImport.click()">
-            <i class="pi pi-upload"></i> Import JSON
-          </button>
-          <input ref="jsonImport" type="file" accept=".json" style="display:none" @change="onImportJSON" />
-        </div>
-
-        <div class="sec-label">Original files</div>
-        <p style="font-size:0.85rem;color:#374151;margin:0 0 0.75rem">
-          A copy of every uploaded file (image or PDF) is saved on disk automatically in the files dir above.
-          Use the <i class="pi pi-download" style="font-size:0.8rem;color:#3b82f6"></i> button on any history row to download it for attaching to an expense form.
-        </p>
-
-        <div class="sec-label">History defaults</div>
-        <div class="settings-grid">
-          <div>
-            <label class="form-label">Default date range on open</label>
-            <select class="form-select" v-model="cfg.defaultRange">
-              <option v-for="o in ['1M','3M','6M','YTD','All']" :key="o">{{ o }}</option>
-            </select>
-          </div>
         </div>
 
         <div class="sec-label">Export</div>
@@ -820,13 +860,6 @@
               <option value="&#9;">Tab</option>
             </select>
           </div>
-        </div>
-
-        <div class="sec-label">File naming (renamed copy)</div>
-        <div class="flex flex-wrap g4 mt1">
-          <label class="cb-label"><input type="checkbox" v-model="cfg.nameDate"     /> Include date</label>
-          <label class="cb-label"><input type="checkbox" v-model="cfg.nameCategory" /> Include category</label>
-          <label class="cb-label"><input type="checkbox" v-model="cfg.nameMeal"     /> Include meal type</label>
         </div>
 
         <div class="mt3">
@@ -922,12 +955,6 @@ createApp({
     const globalDragging = ref(false);
     const lightboxSrc    = ref('');
 
-    // Storage (from server)
-    const storageUsage = ref(null);
-    async function refreshStorage() {
-      try { storageUsage.value = await apiGet('/storage'); } catch {}
-    }
-
     // OCR health
     const ocrHealth = ref(null);
     async function checkHealth() {
@@ -935,14 +962,33 @@ createApp({
       catch { ocrHealth.value = null; }
     }
 
-    // Server config (read-only display + editable fields)
-    const serverCfg = ref(null);
-    const cfgEdit   = ref({ ocr_url: '', port: 8080 });
-    const cfgSaving = ref(false);
+    // Server config
+    const serverCfg     = ref(null);
+    const cfgEdit       = ref({ data_dir: '', ocr_servers: [{ url: 'local', enabled: true }] });
+    const cfgSaving     = ref(false);
+    const dataDirEditing = ref(false);
+    const newServerUrl  = ref('');
+    function addServer() {
+      const url = newServerUrl.value.trim();
+      if (!url) return;
+      cfgEdit.value.ocr_servers.push({ url, enabled: true });
+      newServerUrl.value = '';
+    }
+    function removeServer(i) {
+      cfgEdit.value.ocr_servers.splice(i, 1);
+    }
+    function cancelDirEdit() {
+      cfgEdit.value.data_dir = serverCfg.value?.data_dir ?? cfgEdit.value.data_dir;
+      dataDirEditing.value = false;
+    }
     async function loadServerCfg() {
       try {
         serverCfg.value = await apiGet('/config');
-        cfgEdit.value = { ocr_url: serverCfg.value.ocr_url || '', port: serverCfg.value.port };
+        cfgEdit.value = {
+          data_dir: serverCfg.value.data_dir,
+          ocr_servers: JSON.parse(JSON.stringify(serverCfg.value.ocr_servers)),
+        };
+        dataDirEditing.value = false;
       } catch {}
     }
     async function saveServerCfg() {
@@ -951,11 +997,15 @@ createApp({
         const updated = await fetch('/config', {
           method:'PATCH',
           headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({ ocr_url: cfgEdit.value.ocr_url || null, port: cfgEdit.value.port }),
+          body: JSON.stringify({
+            data_dir: cfgEdit.value.data_dir,
+            ocr_servers: cfgEdit.value.ocr_servers,
+          }),
         });
         if (!updated.ok) { const e=await updated.json(); throw new Error(e.detail||'Unknown error'); }
         serverCfg.value = await updated.json();
-        toast('Config saved — port change takes effect on next restart', 'success');
+        toast('Config saved', 'success');
+        dataDirEditing.value = false;
         checkHealth();
       } catch(e) { toast('Config save failed: '+e.message, 'error'); }
       finally { cfgSaving.value = false; }
@@ -976,7 +1026,7 @@ createApp({
     let _nextId = 0;
 
     // Config
-    const defCfg = { serverUrl:window.location.origin, defaultRange:'3M', dateFormat:'DD/MM/YYYY', csvDelimiter:',', nameDate:true, nameCategory:true, nameMeal:false };
+    const defCfg = { dateFormat:'DD/MM/YYYY', csvDelimiter:',' };
     const cfg = ref({...defCfg});
     function loadCfg() { try{ const s=localStorage.getItem('be-cfg'); if(s) Object.assign(cfg.value,JSON.parse(s)); }catch{} }
     function saveCfg() { localStorage.setItem('be-cfg',JSON.stringify(cfg.value)); toast('Settings saved','success'); }
@@ -1034,7 +1084,7 @@ createApp({
     const sliderMin   = ref(toMIdx(now) - 12);  // default: 1 year back; updated from actual data
     const sliderMax   = ref(toMIdx(now));
     const sliderRange = ref([sliderMax.value-3, sliderMax.value]);
-    const activePreset = ref('3M');
+    const activePreset = ref(localStorage.getItem('be-preset') || '3M');
     const sliderDragging = ref('');  // 'lo' | 'hi' | ''
     const sliderTrack = ref(null);   // template ref
 
@@ -1067,6 +1117,37 @@ createApp({
       document.addEventListener('mousemove', onMove);
       document.addEventListener('mouseup', onUp);
     }
+    function startDragWindow(e) {
+      // Drag the entire selected window — both endpoints move together
+      e.preventDefault();
+      sliderDragging.value = 'win';
+      const startX  = e.clientX;
+      const startLo = sliderRange.value[0];
+      const startHi = sliderRange.value[1];
+      const winWidth = startHi - startLo;
+      const span = sliderMax.value - sliderMin.value || 1;
+
+      const onMove = ev => {
+        const rect = sliderTrack.value.getBoundingClientRect();
+        const delta = Math.round(((ev.clientX - startX) / rect.width) * span);
+        let lo = startLo + delta;
+        let hi = startHi + delta;
+        // Clamp while preserving the window width
+        if (lo < sliderMin.value) { lo = sliderMin.value; hi = lo + winWidth; }
+        if (hi > sliderMax.value) { hi = sliderMax.value; lo = hi - winWidth; }
+        if (lo !== sliderRange.value[0] || hi !== sliderRange.value[1]) {
+          sliderRange.value = [lo, hi];
+          activePreset.value = '';
+        }
+      };
+      const onUp = () => {
+        sliderDragging.value = '';
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup',   onUp);
+      };
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup',   onUp);
+    }
     function sliderTrackDown(e) {
       // Move nearest thumb to click position
       if (!sliderTrack.value) return;
@@ -1086,7 +1167,8 @@ createApp({
       sliderRange.value = [lo, sliderMax.value];
     }
     function monthLabel(i) { const {year,month}=fromMIdx(i); return MON[month]+' '+year; }
-    function applyDefaultRange() { applyPreset(datePresets.find(x=>x.label===cfg.value.defaultRange)||datePresets[1]); }
+    // Persist the chosen preset so it survives page reloads and server restarts
+    watch(activePreset, v => { if (v) localStorage.setItem('be-preset', v); });
 
     watch(allRecords, recs => {
       if (!recs.length) return;
@@ -1274,28 +1356,26 @@ createApp({
       try {
         const thumb = await makeThumbnail(file);
         const fd = new FormData(); fd.append('file', file);
-        const base = (cfg.value.serverUrl||'').replace(/\/$/,'');
-        const resp = await fetch(base+'/extract', {method:'POST', body:fd});
+        const resp = await fetch('/extract', {method:'POST', body:fd});
         if (!resp.ok) { const e=await resp.json().catch(()=>({detail:resp.statusText})); throw new Error(e.detail||resp.statusText); }
         const data = await resp.json();
-        const {ocr_text, status, ...result} = data;
+        const {ocr_text, status, provenance, ...result} = data;
 
         const np=[]; const ext=file.name.split('.').pop();
-        if(cfg.value.nameDate     && result.date)      np.push(result.date.replace(/\//g,'-'));
-        if(cfg.value.nameCategory && result.category)  np.push(result.category);
-        if(cfg.value.nameMeal     && result.meal_type) np.push(result.meal_type);
+        if(result.date)      np.push(result.date.replace(/\//g,'-'));
+        if(result.category)  np.push(result.category);
+        if(result.meal_type) np.push(result.meal_type);
 
         // If reprocessing, delete old record first
         if (forceNew && allRecords.value.find(r => r.hash === hash)) {
           await apiDelete('/history/'+hash).catch(() => {});
         }
 
-        const record = {hash, filename:file.name, filename_generated:np.length?np.join('_')+'.'+ext:file.name, thumbnail:thumb, ocr_text, result, correction:'', action:'', timestamp:new Date().toISOString()};
+        const record = {hash, filename:file.name, filename_generated:np.length?np.join('_')+'.'+ext:file.name, ocr_text, result, provenance, correction:'', action:'', timestamp:new Date().toISOString()};
         await saveRecord(record, file);
-        refreshStorage();
 
         const card = item();
-        if (card) Object.assign(card, {...result, _id:id, _status:'ok', _filename:file.name, _hash:hash, _thumb:thumb, _correction:'', _file:file});
+        if (card) Object.assign(card, {...result, _id:id, _status:'ok', _filename:file.name, _filename_generated:record.filename_generated, _source:forceNew?'reprocessed':'new', _hash:hash, _thumb:thumb, _correction:'', _file:file});
       } catch(e) {
         const card = item();
         if (card) Object.assign(card, {_status:'error', _errorMsg:e.message});
@@ -1380,11 +1460,25 @@ createApp({
     }
 
     // CSV export
+    // Maps toggleCols field names to record value extractors
+    const COL_EXTRACT = {
+      date:     r => r.result?.date || '',
+      category: r => r.result?.category || '',
+      amount:   r => r.result?.total_amount || r.result?.amount || '',
+      meal_type:r => r.result?.meal_type || '',
+      time:     r => r.result?.time || '',
+      added:    r => r.timestamp || '',
+      filename: r => r.filename_generated || r.filename || '',
+      status:   r => r.action || '',
+      ocr_text: r => Array.isArray(r.ocr_text) ? r.ocr_text.join(' ') : (r.ocr_text || ''),
+    };
     function exportCSV() {
       const d=cfg.value.csvDelimiter||',', qs=v=>'"'+String(v??'').replace(/"/g,'""')+'"';
-      const hdrs=['date','time','category','meal_type','total_amount','currency','from_location','to_location','hotel_name','filename','status','correction','timestamp'];
-      const lines=[hdrs.join(d)];
-      visibleRecords.value.forEach(r=>{const x=r.result||{};lines.push([x.date||'',x.time||'',x.category||'',x.meal_type||'',x.total_amount||x.amount||'',x.currency||'',x.from_location||'',x.to_location||'',x.hotel_name||'',r.filename||'',r.action||'',r.correction||'',r.timestamp||''].map(qs).join(d));});
+      const vis=toggleCols.value.filter(c=>c.visible && c.field!=='ocr_text');
+      const lines=[vis.map(c=>qs(c.header)).join(d)];
+      visibleRecords.value.forEach(r=>{
+        lines.push(vis.map(c=>qs(COL_EXTRACT[c.field]?.(r)??'')).join(d));
+      });
       const blob=new Blob([lines.join('\n')],{type:'text/csv'}); const url=URL.createObjectURL(blob);
       Object.assign(document.createElement('a'),{href:url,download:'bill-export.csv'}).click(); URL.revokeObjectURL(url);
     }
@@ -1429,8 +1523,6 @@ createApp({
       });
 
       await loadHistory();
-      applyDefaultRange();
-      refreshStorage();
       checkHealth();
       loadServerCfg();
     });
@@ -1443,7 +1535,7 @@ createApp({
       cfg,saveCfg,
       toggleCols,colOn,dragColIdx,dragOverIdx,onColDragStart,onColDragOver,onColDrop,onColDragEnd,tdColStyle,
       sliderMin,sliderMax,sliderRange,sliderLeftPct,sliderRightPct,sliderWidthPct,sliderDragging,sliderTrack,
-      startDrag,sliderTrackDown,setSliderLo,setSliderHi,monthLabel,activePreset,datePresets,applyPreset,
+      startDrag,startDragWindow,sliderTrackDown,setSliderLo,setSliderHi,monthLabel,activePreset,datePresets,applyPreset,
       sortField,sortDir,toggleSort,
       loadHistory,downloadOriginal,
       onFileInput,
@@ -1452,9 +1544,9 @@ createApp({
       thumbHover,showThumbPreview,hideThumbPreview,
       selectedHashes,allPageSelected,toggleSelect,toggleSelectPage,deleteSelected,resetHistory,
       editVisible,editRec,openEdit,saveEdit,deleteRec,
-      exportCSV,exportJSON,onImportJSON,
+      exportCSV,
       fmtAmt,catClass,catIcon,badgeClass,fmtTs,fmtBytes,
-      storageUsage,ocrHealth,checkHealth,serverCfg,cfgEdit,cfgSaving,saveServerCfg,
+      ocrHealth,checkHealth,serverCfg,cfgEdit,cfgSaving,dataDirEditing,cancelDirEdit,saveServerCfg,newServerUrl,addServer,removeServer,
     };
   }
 }).mount('#app');

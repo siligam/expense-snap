@@ -31,6 +31,8 @@ dependencies = [
 # Developer tooling
 dev = [
     "pytest>=8.0",
+    "mkdocs>=1.6",
+    "mkdocs-material>=9.5",
 ]
 # YAML config support (optional — JSON config works without this)
 yaml = [

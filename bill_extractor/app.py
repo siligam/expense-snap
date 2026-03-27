@@ -19,10 +19,17 @@ from fastapi.responses import FileResponse, Response
 
 _BASE_DIR = Path(__file__).parent
 
-from .bill_parser import BillingInformationExtractor
+from .bill_parser import BillingInformationExtractor, BillingExtractionConfig
 from .config import Config, load_config
 from .history import HistoryStore
 from .ocr_reader import process as ocr_process
+
+try:
+    from doctr import __version__ as _DOCTR_VERSION  # type: ignore[import]
+except Exception:
+    _DOCTR_VERSION = None
+
+_DEFAULT_MODEL_NAME: str = BillingExtractionConfig().model_name
 
 # ---------------------------------------------------------------------------
 # Favicon (blue rounded square + white receipt with zigzag tear bottom)
@@ -137,6 +144,7 @@ _store: HistoryStore | None = None
 _config: Config | None = None
 _lazy_loading = False          # True while models are loading in background
 _lazy_load_event: asyncio.Event | None = None
+_ocr_rr_idx = 0               # round-robin cursor for remote OCR servers
 
 ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".pdf"}
 
@@ -206,17 +214,21 @@ def create_app(
 
         # Model loading policy:
         # - headless: always eager (serve is a GPU node)
-        # - no ocr_url: eager (local server, models always needed)
-        # - ocr_url set: skip startup load (lazy fallback only)
+        # - no enabled remote servers: eager (local models always needed)
+        # - remote servers configured: skip startup load (lazy fallback only)
         if _extractor is None:  # allow tests to mock before lifespan runs
-            if headless or _config.ocr_url is None:
+            _remotes = [
+                s["url"] for s in _config.ocr_servers
+                if s.get("enabled") and s.get("url") != "local"
+            ]
+            if headless or not _remotes:
                 print("Loading models, please wait…")
                 loop = asyncio.get_running_loop()
                 await loop.run_in_executor(None, _load_models_sync)
                 print("Ready.\n")
             else:
-                print(f"Remote OCR configured: {_config.ocr_url}")
-                print("Models will be loaded lazily if remote is unreachable.\n")
+                print(f"Remote OCR server(s): {', '.join(_remotes)}")
+                print("Models will be loaded lazily if remotes are unreachable.\n")
 
         if _semaphore is None:
             _semaphore = asyncio.Semaphore(1)
@@ -259,6 +271,9 @@ def create_app(
 
     @app.post("/extract")
     async def extract(file: UploadFile = File(...)):
+        from datetime import datetime, timezone
+        submitted_at = datetime.now(timezone.utc).isoformat()
+
         ext = Path(file.filename or "upload").suffix.lower()
         if ext not in ALLOWED_EXTENSIONS:
             raise HTTPException(
@@ -270,15 +285,33 @@ def create_app(
         if not contents:
             raise HTTPException(status_code=400, detail="Uploaded file is empty.")
 
-        # Try remote OCR proxy first
-        if _config and _config.ocr_url:
-            try:
-                ocr_lines, result = await _proxy_extract(
-                    _config.ocr_url, file.filename or "upload", ext, contents
-                )
-                return {"ocr_text": ocr_lines, **result, "status": "ok"}
-            except httpx.HTTPError:
-                pass  # fall through to local
+        # Round-robin over enabled remote OCR servers, fall back to local
+        global _ocr_rr_idx
+        _servers = _config.ocr_servers if _config else []
+        remote_urls = [
+            s["url"] for s in _servers
+            if s.get("enabled") and s.get("url") != "local"
+        ]
+        use_local = not remote_urls or any(
+            s.get("url") == "local" and s.get("enabled") for s in _servers
+        )
+        if remote_urls:
+            start = _ocr_rr_idx % len(remote_urls)
+            for i in range(len(remote_urls)):
+                url = remote_urls[(start + i) % len(remote_urls)]
+                try:
+                    ocr_lines, result = await _proxy_extract(
+                        url, file.filename or "upload", ext, contents
+                    )
+                    _ocr_rr_idx = (start + i + 1) % len(remote_urls)
+                    completed_at = datetime.now(timezone.utc).isoformat()
+                    return {"ocr_text": ocr_lines, **result, "status": "ok",
+                            "provenance": _make_provenance(submitted_at, completed_at, url)}
+                except httpx.HTTPError:
+                    continue  # try next server
+
+        if not use_local:
+            raise HTTPException(status_code=503, detail="No OCR servers reachable.")
 
         # Local inference
         await _ensure_models()
@@ -298,7 +331,9 @@ def create_app(
         finally:
             Path(tmp.name).unlink(missing_ok=True)
 
-        return {"ocr_text": ocr_lines, **result, "status": "ok"}
+        completed_at = datetime.now(timezone.utc).isoformat()
+        return {"ocr_text": ocr_lines, **result, "status": "ok",
+                "provenance": _make_provenance(submitted_at, completed_at, "local")}
 
     # ----------------------------------------------------------------
     # Routes — full-stack only (history + file serving + UI)
@@ -370,15 +405,14 @@ def create_app(
         @app.get("/config")
         async def get_config():
             return {
-                "history_file": str(_config.history_file),
-                "files_dir": str(_config.files_dir),
-                "ocr_url": _config.ocr_url,
+                "data_dir": str(_config.data_dir),
+                "ocr_servers": _config.ocr_servers,
                 "port": _config.port,
             }
 
         @app.patch("/config")
         async def patch_config(body: dict):
-            allowed = {"ocr_url", "port"}
+            allowed = {"ocr_servers", "data_dir"}
             unknown = set(body) - allowed
             if unknown:
                 raise HTTPException(
@@ -386,22 +420,39 @@ def create_app(
                     detail=f"Read-only or unknown fields: {', '.join(sorted(unknown))}. "
                            f"Editable: {', '.join(sorted(allowed))}.",
                 )
-            if "ocr_url" in body:
-                _config.ocr_url = body["ocr_url"] or None
-            if "port" in body:
-                _config.port = int(body["port"])
-            # Persist to the config file (JSON only for simplicity)
+            if "ocr_servers" in body:
+                servers = body["ocr_servers"]
+                if not isinstance(servers, list):
+                    raise HTTPException(status_code=422, detail="ocr_servers must be a list.")
+                # Ensure local entry is always present
+                if not any(s.get("url") == "local" for s in servers):
+                    servers = [{"url": "local", "enabled": True}] + servers
+                _config.ocr_servers = servers
+            if "data_dir" in body:
+                new_dir = Path(os.path.expanduser(str(body["data_dir"])))
+                new_dir.mkdir(parents=True, exist_ok=True)
+                _config.history_file = new_dir / "history.json"
+                _config.files_dir = new_dir / "files"
+                # Swap the store immediately — no restart needed.
+                # Existing data remains at the old location; the user migrates manually.
+                global _store
+                _store = HistoryStore(_config.history_file, _config.files_dir)
+            # Persist atomically to config.json in the (possibly new) data_dir
             cfg_path = _config.history_file.parent / "config.json"
-            data = {
+            persisted = {
                 "history_file": str(_config.history_file),
                 "files_dir": str(_config.files_dir),
-                "ocr_url": _config.ocr_url,
+                "ocr_servers": _config.ocr_servers,
                 "port": _config.port,
             }
             tmp = cfg_path.with_suffix(".tmp")
-            tmp.write_text(json.dumps(data, indent=2) + "\n")
+            tmp.write_text(json.dumps(persisted, indent=2) + "\n")
             tmp.replace(cfg_path)
-            return data
+            return {
+                "data_dir": str(_config.data_dir),
+                "ocr_servers": _config.ocr_servers,
+                "port": _config.port,
+            }
 
     return app
 
@@ -409,6 +460,17 @@ def create_app(
 # ---------------------------------------------------------------------------
 # Blocking inference helper
 # ---------------------------------------------------------------------------
+
+def _make_provenance(submitted_at: str, completed_at: str, ocr_server: str) -> dict:
+    """Build the provenance block attached to every extraction result."""
+    return {
+        "submitted_at": submitted_at,
+        "completed_at": completed_at,
+        "ocr_server": ocr_server,
+        "doctr_version": _DOCTR_VERSION,
+        "model_name": _extractor.config.model_name if _extractor else _DEFAULT_MODEL_NAME,
+    }
+
 
 def _run_inference(file_path: str) -> tuple[list[str], dict]:
     ocr_lines = ocr_process(file_path)
@@ -489,7 +551,10 @@ def main():
         if args.port:
             cfg.port = args.port
         if args.ocr_url:
-            cfg.ocr_url = args.ocr_url
+            cfg.ocr_servers = [
+                {"url": "local", "enabled": False},
+                {"url": args.ocr_url, "enabled": True},
+            ]
         headless = args.headless
     else:
         headless = False

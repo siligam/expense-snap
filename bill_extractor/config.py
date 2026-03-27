@@ -8,10 +8,12 @@ from typing import Any
 
 DEFAULT_DIR = Path.home() / ".bill_extractor"
 
+_DEFAULT_SERVERS: list[dict] = [{"url": "local", "enabled": True}]
+
 _DEFAULT_CONFIG: dict[str, Any] = {
     "history_file": str(DEFAULT_DIR / "history.json"),
     "files_dir": str(DEFAULT_DIR / "files"),
-    "ocr_url": None,
+    "ocr_servers": _DEFAULT_SERVERS,
     "port": 8080,
 }
 
@@ -20,8 +22,13 @@ _DEFAULT_CONFIG: dict[str, Any] = {
 class Config:
     history_file: Path = field(default_factory=lambda: DEFAULT_DIR / "history.json")
     files_dir: Path = field(default_factory=lambda: DEFAULT_DIR / "files")
-    ocr_url: str | None = None
+    ocr_servers: list = field(default_factory=lambda: [{"url": "local", "enabled": True}])
     port: int = 8080
+
+    @property
+    def data_dir(self) -> Path:
+        """Parent directory that holds history.json, files/, and the log."""
+        return self.history_file.parent
 
 
 def _write_default(path: Path) -> None:
@@ -50,6 +57,7 @@ def load_config(path: Path | str | None = None) -> Config:
     """Load config from *path*, or auto-discover in ~/.bill_extractor/.
 
     Creates a default config.json on first run if none exists.
+    Backward compatible: old ``ocr_url`` key is converted to ``ocr_servers``.
     """
     if path is not None:
         cfg_path = Path(path).expanduser()
@@ -73,9 +81,22 @@ def load_config(path: Path | str | None = None) -> Config:
             return Path(os.path.expanduser(val))
         return fallback if val is None else val
 
+    # Backward compat: old single-URL field → server list
+    if "ocr_url" in raw and "ocr_servers" not in raw:
+        ocr_url = raw.get("ocr_url")
+        if ocr_url:
+            servers: list = [
+                {"url": "local", "enabled": False},
+                {"url": ocr_url, "enabled": True},
+            ]
+        else:
+            servers = [{"url": "local", "enabled": True}]
+    else:
+        servers = raw.get("ocr_servers", _DEFAULT_SERVERS)
+
     return Config(
         history_file=_expand("history_file", raw, DEFAULT_DIR / "history.json"),
         files_dir=_expand("files_dir", raw, DEFAULT_DIR / "files"),
-        ocr_url=raw.get("ocr_url", None),
+        ocr_servers=servers,
         port=int(raw.get("port", 8080)),
     )

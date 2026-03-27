@@ -115,6 +115,8 @@ def _normalize_date(value: Any) -> Optional[str]:
     s = str(value).strip()
     if not s:
         return None
+    # Strip trailing time component (e.g. "23/02/2026 18:58" → "23/02/2026")
+    s = re.sub(r"\s+\d{1,2}:\d{2}(?::\d{2})?$", "", s).strip()
     # Expand 2-digit year: DD/MM/YY → DD/MM/YYYY
     m = re.fullmatch(r"(\d{1,2})/(\d{1,2})/(\d{2})", s)
     if m:
@@ -530,6 +532,7 @@ class BillingInformationExtractor:
 
         return {
             "category": "hotel",
+            "date": check_in,
             "name": name,
             "check_in": check_in,
             "check_out": check_out,

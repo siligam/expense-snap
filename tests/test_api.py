@@ -330,24 +330,42 @@ def test_get_config_returns_fields(full_client):
         resp = c.get("/config")
     assert resp.status_code == 200
     data = resp.json()
-    assert "history_file" in data
-    assert "files_dir" in data
-    assert "ocr_url" in data
+    assert "data_dir" in data
+    assert "ocr_servers" in data
     assert "port" in data
+    assert isinstance(data["ocr_servers"], list)
 
 
-def test_patch_config_ocr_url(full_client):
+def test_patch_config_ocr_servers(full_client, tmp_path):
     c, _ = full_client
     import bill_extractor.app as am
     import bill_extractor.config as cfg_mod
-    mock_cfg = cfg_mod.Config()
+    mock_cfg = cfg_mod.Config(
+        history_file=tmp_path / "history.json",
+        files_dir=tmp_path / "files",
+    )
+    servers = [{"url": "local", "enabled": True}, {"url": "http://gpu:8080", "enabled": True}]
     import unittest.mock as mock
     with mock.patch.object(am, "_config", mock_cfg):
-        resp = c.patch("/config", json={"ocr_url": "http://gpu:8080"})
+        resp = c.patch("/config", json={"ocr_servers": servers})
         assert resp.status_code == 200
-        assert mock_cfg.ocr_url == "http://gpu:8080"
-        resp2 = c.patch("/config", json={"ocr_url": None})
-        assert mock_cfg.ocr_url is None
+        assert mock_cfg.ocr_servers == servers
+
+
+def test_patch_config_ensures_local_entry(full_client, tmp_path):
+    """Patching without a local entry should auto-insert one."""
+    c, _ = full_client
+    import bill_extractor.app as am
+    import bill_extractor.config as cfg_mod
+    mock_cfg = cfg_mod.Config(
+        history_file=tmp_path / "history.json",
+        files_dir=tmp_path / "files",
+    )
+    import unittest.mock as mock
+    with mock.patch.object(am, "_config", mock_cfg):
+        resp = c.patch("/config", json={"ocr_servers": [{"url": "http://gpu:8080", "enabled": True}]})
+        assert resp.status_code == 200
+        assert any(s["url"] == "local" for s in mock_cfg.ocr_servers)
 
 
 def test_patch_config_unknown_field_rejected(full_client):

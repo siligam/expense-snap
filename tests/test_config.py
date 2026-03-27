@@ -7,33 +7,58 @@ from bill_extractor.config import Config, load_config, DEFAULT_DIR
 
 
 def test_load_config_creates_default_json(tmp_path, monkeypatch):
-    monkeypatch.setattr("bill_extractor.config.DEFAULT_DIR", tmp_path)
-    # Patch inside the module so the default_factory also uses tmp_path
     import bill_extractor.config as cfg_mod
-    orig_dir = cfg_mod.DEFAULT_DIR
     cfg_mod.DEFAULT_DIR = tmp_path
     try:
         cfg = load_config()
         assert (tmp_path / "config.json").exists()
         assert isinstance(cfg, Config)
         assert cfg.port == 8080
-        assert cfg.ocr_url is None
+        assert cfg.ocr_servers == [{"url": "local", "enabled": True}]
     finally:
-        cfg_mod.DEFAULT_DIR = orig_dir
+        cfg_mod.DEFAULT_DIR = DEFAULT_DIR
 
 
 def test_load_config_reads_json(tmp_path):
+    servers = [{"url": "local", "enabled": False}, {"url": "http://gpu:8080", "enabled": True}]
+    cfg_file = tmp_path / "config.json"
+    cfg_file.write_text(json.dumps({
+        "history_file": str(tmp_path / "h.json"),
+        "files_dir": str(tmp_path / "files"),
+        "ocr_servers": servers,
+        "port": 9090,
+    }))
+    cfg = load_config(cfg_file)
+    assert cfg.port == 9090
+    assert cfg.ocr_servers == servers
+    assert cfg.history_file == tmp_path / "h.json"
+
+
+def test_load_config_backward_compat_ocr_url(tmp_path):
+    """Old configs with ocr_url are converted to ocr_servers."""
     cfg_file = tmp_path / "config.json"
     cfg_file.write_text(json.dumps({
         "history_file": str(tmp_path / "h.json"),
         "files_dir": str(tmp_path / "files"),
         "ocr_url": "http://gpu:8080",
-        "port": 9090,
+        "port": 8080,
     }))
     cfg = load_config(cfg_file)
-    assert cfg.port == 9090
-    assert cfg.ocr_url == "http://gpu:8080"
-    assert cfg.history_file == tmp_path / "h.json"
+    assert any(s["url"] == "http://gpu:8080" and s["enabled"] for s in cfg.ocr_servers)
+    assert any(s["url"] == "local" and not s["enabled"] for s in cfg.ocr_servers)
+
+
+def test_load_config_backward_compat_null_ocr_url(tmp_path):
+    """Old configs with null ocr_url → local-only server list."""
+    cfg_file = tmp_path / "config.json"
+    cfg_file.write_text(json.dumps({
+        "history_file": str(tmp_path / "h.json"),
+        "files_dir": str(tmp_path / "files"),
+        "ocr_url": None,
+        "port": 8080,
+    }))
+    cfg = load_config(cfg_file)
+    assert cfg.ocr_servers == [{"url": "local", "enabled": True}]
 
 
 def test_load_config_expands_tilde(tmp_path):
@@ -41,7 +66,6 @@ def test_load_config_expands_tilde(tmp_path):
     cfg_file.write_text(json.dumps({
         "history_file": "~/my_history.json",
         "files_dir": "~/my_files",
-        "ocr_url": None,
         "port": 8080,
     }))
     cfg = load_config(cfg_file)
@@ -54,7 +78,12 @@ def test_load_config_missing_keys_use_defaults(tmp_path):
     cfg_file.write_text("{}")
     cfg = load_config(cfg_file)
     assert cfg.port == 8080
-    assert cfg.ocr_url is None
+    assert cfg.ocr_servers == [{"url": "local", "enabled": True}]
+
+
+def test_config_data_dir_property(tmp_path):
+    cfg = Config(history_file=tmp_path / "history.json", files_dir=tmp_path / "files")
+    assert cfg.data_dir == tmp_path
 
 
 def test_load_config_yaml_raises_without_pyyaml(tmp_path, monkeypatch):
