@@ -14,6 +14,7 @@ dependencies = [
     "uvicorn[standard]>=0.29.0",
     "python-multipart>=0.0.9",   # required by FastAPI for file uploads
     "httpx>=0.27.0",             # async proxy to remote OCR server
+    "loguru>=0.7.0",             # structured logging
 
     # OCR — DocTR with PyTorch backend (pypdfium2 enables PDF support)
     # Note: [torch] extra was removed in doctr v1.0; PyTorch is now the only backend

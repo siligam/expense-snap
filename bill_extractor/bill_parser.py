@@ -4,13 +4,12 @@ import os
 os.environ["TRANSFORMERS_VERBOSITY"] = "error"
 
 import json
-import logging
 import re
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Sequence, Union
 
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
@@ -431,7 +430,7 @@ class BillingInformationExtractor:
         self.device = _best_device()
         # float16 is faster on GPU/MPS; float32 on CPU avoids precision issues
         dtype = torch.float32 if self.device.type == "cpu" else torch.float16
-        logger.info("Using device: %s (dtype=%s)", self.device, dtype)
+        logger.info("Using device: {} (dtype={})", self.device, dtype)
         self.tokenizer = AutoTokenizer.from_pretrained(self.config.model_name, use_fast=True)
         self.model = AutoModelForCausalLM.from_pretrained(
             self.config.model_name,
@@ -466,7 +465,7 @@ class BillingInformationExtractor:
         text = self.tokenizer.decode(new_tokens, skip_special_tokens=True)
         if not text.strip():
             raise RuntimeError("Model returned empty text.")
-        logger.debug("Generated text (%d chars):\n%s", len(text), text)
+        logger.debug("Generated text ({} chars):\n{}", len(text), text)
         return text
 
     def route_category(self, bill_text: BillTextInput) -> str:

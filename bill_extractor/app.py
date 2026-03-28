@@ -16,9 +16,14 @@ import httpx
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response
+from loguru import logger
+
+# Stdlib logger — routed through _InterceptHandler into loguru.
+# Used for log calls inside async request handlers where direct loguru
+# calls are silently dropped on Linux (async context after yield).
+_log = logging.getLogger(__name__)
 
 _BASE_DIR = Path(__file__).parent
-logger = logging.getLogger("bill_extractor")
 
 from .bill_parser import BillingInformationExtractor, BillingExtractionConfig
 from .config import Config, load_config
@@ -50,89 +55,52 @@ _FAVICON_SVG: bytes = (
 # Logging helpers
 # ---------------------------------------------------------------------------
 
-_log_configured = False  # True after CLI configures logging via uvicorn log_config
+class _InterceptHandler(logging.Handler):
+    """Route stdlib logging (uvicorn, etc.) through loguru."""
+
+    def emit(self, record: logging.LogRecord) -> None:
+        try:
+            level = logger.level(record.levelname).name
+        except ValueError:
+            level = record.levelno
+        frame, depth = logging.currentframe(), 2
+        while frame and frame.f_code.co_filename == logging.__file__:
+            frame = frame.f_back  # type: ignore[assignment]
+            depth += 1
+        logger.opt(depth=depth, exception=record.exc_info).log(level, record.getMessage())
 
 
-def _build_uvicorn_log_config(log_path: Path) -> dict:
-    """Full logging config passed to uvicorn.run() — timestamps on console + file."""
-    global _log_configured
-    _log_configured = True
+def _setup_logging(log_path: Path) -> None:
+    """Configure loguru sinks and intercept all stdlib logging."""
     log_path.parent.mkdir(parents=True, exist_ok=True)
-    return {
-        "version": 1,
-        "disable_existing_loggers": False,
-        "formatters": {
-            "default": {
-                "()": "uvicorn.logging.DefaultFormatter",
-                "fmt": "%(asctime)s %(levelprefix)s %(message)s",
-                "datefmt": "%Y-%m-%d %H:%M:%S",
-                "use_colors": None,
-            },
-            "access": {
-                "()": "uvicorn.logging.AccessFormatter",
-                "fmt": '%(asctime)s %(levelprefix)s %(client_addr)s - "%(request_line)s" %(status_code)s',
-                "datefmt": "%Y-%m-%d %H:%M:%S",
-            },
-            "file": {
-                "format": "%(asctime)s %(levelname)-8s %(name)s: %(message)s",
-                "datefmt": "%Y-%m-%d %H:%M:%S",
-            },
-        },
-        "handlers": {
-            "console_default": {
-                "formatter": "default",
-                "class": "logging.StreamHandler",
-                "stream": "ext://sys.stderr",
-            },
-            "console_access": {
-                "formatter": "access",
-                "class": "logging.StreamHandler",
-                "stream": "ext://sys.stdout",
-            },
-            "file": {
-                "formatter": "file",
-                "class": "logging.handlers.RotatingFileHandler",
-                "filename": str(log_path),
-                "maxBytes": 5_242_880,   # 5 MB
-                "backupCount": 3,
-                "encoding": "utf-8",
-            },
-        },
-        "loggers": {
-            "uvicorn":        {"handlers": ["console_default", "file"], "level": "INFO", "propagate": False},
-            "uvicorn.error":  {"handlers": ["console_default", "file"], "level": "INFO", "propagate": False},
-            "uvicorn.access": {"handlers": ["console_access",  "file"], "level": "INFO", "propagate": False},
-            "bill_extractor": {"handlers": ["console_default", "file"], "level": "INFO", "propagate": False},
-        },
-        "root": {"handlers": ["file"], "level": "WARNING"},
-    }
 
+    logger.remove()  # remove the default stderr sink
 
-def _setup_file_logging(log_path: Path) -> None:
-    """Fallback: add file handler when running under direct `uvicorn` (not CLI).
-
-    Skipped if the CLI already configured logging via _build_uvicorn_log_config().
-    """
-    if _log_configured:
-        return
-
-    from logging.handlers import RotatingFileHandler
-
-    log_path.parent.mkdir(parents=True, exist_ok=True)
-    fmt = logging.Formatter(
-        "%(asctime)s %(levelname)-8s %(name)s: %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S",
+    # Console — coloured, human-readable
+    logger.add(
+        lambda msg: print(msg, end=""),
+        colorize=True,
+        format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> <level>{level: <8}</level> {name}: {message}",
+        level="INFO",
     )
-    fh = RotatingFileHandler(log_path, maxBytes=5_242_880, backupCount=3, encoding="utf-8")
-    fh.setFormatter(fmt)
-    fh.setLevel(logging.DEBUG)
 
-    # Route all uvicorn loggers through root so the file handler catches them
-    root = logging.getLogger()
-    root.setLevel(logging.DEBUG)
-    root.addHandler(fh)
-    for name in ("uvicorn", "uvicorn.error", "uvicorn.access"):
-        logging.getLogger(name).propagate = True
+    # Rotating file — enqueue=True offloads writes to a background thread,
+    # which is required for reliable logging from async request handlers on Linux.
+    logger.add(
+        str(log_path),
+        rotation="5 MB",
+        retention=3,
+        encoding="utf-8",
+        format="{time:YYYY-MM-DD HH:mm:ss} {level: <8} {name}: {message}",
+        level="INFO",
+        enqueue=True,
+    )
+
+    # Intercept uvicorn / httpx / everything else that uses stdlib logging
+    logging.basicConfig(handlers=[_InterceptHandler()], level=logging.DEBUG, force=True)
+    for name in ("uvicorn", "uvicorn.error", "uvicorn.access", "uvicorn.lifespan"):
+        logging.getLogger(name).handlers = [_InterceptHandler()]
+        logging.getLogger(name).propagate = False
 
 
 # ---------------------------------------------------------------------------
@@ -234,7 +202,7 @@ def create_app(
         if _semaphore is None:
             _semaphore = asyncio.Semaphore(1)
 
-        _setup_file_logging(_config.history_file.parent / "bill_extractor.log")
+        _setup_logging(_config.history_file.parent / "bill_extractor.log")
 
         yield
 
@@ -321,7 +289,7 @@ def create_app(
                 finally:
                     Path(tmp.name).unlink(missing_ok=True)
                 completed_at = datetime.now(timezone.utc).isoformat()
-                logger.info("extract: %s  server=local", file.filename or "upload")
+                _log.info("extract: %s  server=local", file.filename or "upload")
                 return {"ocr_text": ocr_lines, **result, "status": "ok",
                         "provenance": _make_provenance(submitted_at, completed_at, "local")}
             else:
@@ -330,7 +298,7 @@ def create_app(
                         url, file.filename or "upload", ext, contents
                     )
                     completed_at = datetime.now(timezone.utc).isoformat()
-                    logger.info("extract: %s  server=%s", file.filename or "upload", url)
+                    _log.info("extract: %s  server=%s", file.filename or "upload", url)
                     return {"ocr_text": ocr_lines, **result, "status": "ok",
                             "provenance": _make_provenance(submitted_at, completed_at, url)}
                 except httpx.HTTPError:
@@ -581,8 +549,7 @@ def main():
         threading.Thread(target=_open_browser, daemon=True).start()
 
     target_app = create_app(headless=headless, cfg=cfg)
-    log_cfg = _build_uvicorn_log_config(cfg.history_file.parent / "bill_extractor.log")
-    uvicorn.run(target_app, host="0.0.0.0", port=cfg.port, reload=False, log_config=log_cfg)
+    uvicorn.run(target_app, host="0.0.0.0", port=cfg.port, reload=False, log_config=None)
 
 
 def _run_init_cmd() -> None:
