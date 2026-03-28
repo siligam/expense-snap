@@ -717,6 +717,8 @@
                 <td style="width:68px;padding:6px 8px">
                   <template v-if="rec.original_file">
                     <div v-if="rec.original_file.endsWith('.pdf')"
+                         @mouseenter="showPdfThumbPreview($event, rec)"
+                         @mouseleave="hideThumbPreview"
                          @click="window.open('/files/'+rec.original_file,'_blank')"
                          style="cursor:pointer;width:60px;height:60px;display:flex;align-items:center;justify-content:center;border-radius:5px;border:1px solid #e2e8f0;background:#f8fafc">
                       <i class="pi pi-file-pdf" style="font-size:1.5rem;color:#ef4444"></i>
@@ -1264,6 +1266,32 @@ createApp({
     }
     function hideThumbPreview() { thumbHover.value.visible = false; }
 
+    const _pdfThumbCache = {};
+    async function showPdfThumbPreview(e, rec) {
+      const target = e.currentTarget;  // capture before first await — currentTarget goes null after handler returns
+      const url = '/files/' + rec.original_file;
+      const cacheKey = rec.hash || url;
+      if (!_pdfThumbCache[cacheKey]) {
+        try {
+          if (typeof pdfjsLib === 'undefined') return;
+          pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
+          const resp = await fetch(url);
+          const ab = await resp.arrayBuffer();
+          const pdf = await pdfjsLib.getDocument({data: ab}).promise;
+          const page = await pdf.getPage(1);
+          const T = 800;
+          const vp0 = page.getViewport({scale: 1});
+          const scale = Math.min(T / vp0.width, T / vp0.height, 1);
+          const vp = page.getViewport({scale});
+          const c = document.createElement('canvas');
+          c.width = Math.round(vp.width); c.height = Math.round(vp.height);
+          await page.render({canvasContext: c.getContext('2d'), viewport: vp}).promise;
+          _pdfThumbCache[cacheKey] = c.toDataURL('image/jpeg', 0.7);
+        } catch { return; }
+      }
+      showThumbPreview({currentTarget: target}, _pdfThumbCache[cacheKey]);
+    }
+
     // Sort
     const sortField = ref('');
     const sortDir   = ref('asc');
@@ -1393,7 +1421,16 @@ createApp({
           await apiDelete('/history/'+hash).catch(() => {});
         }
 
-        const record = {hash, filename:file.name, filename_generated:np.length?np.join('_')+'.'+ext:file.name, ocr_text, result, provenance, correction:'', action:'', timestamp:new Date().toISOString()};
+        let base_generated = np.length ? np.join('_')+'.'+ext : file.name;
+        if (np.length) {
+          const base = np.join('_'); let candidate = base+'.'+ext; let n = 1;
+          while (allRecords.value.some(r => r.hash !== hash && r.filename_generated === candidate)) {
+            n++; candidate = base+'_'+n+'.'+ext;
+          }
+          base_generated = candidate;
+        }
+
+        const record = {hash, filename:file.name, filename_generated:base_generated, ocr_text, result, provenance, correction:'', action:'', timestamp:new Date().toISOString()};
         await saveRecord(record, file);
 
         const card = item();
@@ -1563,7 +1600,7 @@ createApp({
       onFileInput,
       markItem,saveItemCorrection,downloadRenamedItem,reprocessItem,
       filterOpen,filterCat,filterDateFrom,filterDateTo,filterAmountOp,filterAmountVal,activeFilterCount,clearFilters,
-      thumbHover,showThumbPreview,hideThumbPreview,
+      thumbHover,showThumbPreview,hideThumbPreview,showPdfThumbPreview,
       selectedHashes,allPageSelected,toggleSelect,toggleSelectPage,deleteSelected,resetHistory,
       editVisible,editRec,openEdit,saveEdit,deleteRec,
       exportCSV,
