@@ -1,6 +1,8 @@
 site_name: Bill Extractor
 site_description: Extract structured expense data from receipt photos and PDFs
-site_url: ""
+site_url: https://siligam.github.io/expense-snap/
+repo_url: https://github.com/siligam/expense-snap
+repo_name: siligam/expense-snap
 docs_dir: docs
 theme:
   name: material
