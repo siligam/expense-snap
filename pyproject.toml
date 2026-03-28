@@ -34,6 +34,8 @@ dependencies = [
 # Developer tooling
 dev = [
     "pytest>=8.0",
+    "pytest-playwright>=0.5",
+    "httpx>=0.27.0",
     "mkdocs>=1.6",
     "mkdocs-material>=9.5",
 ]
