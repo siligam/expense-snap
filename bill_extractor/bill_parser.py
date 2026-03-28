@@ -428,8 +428,9 @@ class BillingInformationExtractor:
     def __init__(self, config: Optional[BillingExtractionConfig] = None) -> None:
         self.config = config or BillingExtractionConfig()
         self.device = _best_device()
-        # float16 is faster on GPU/MPS; float32 on CPU avoids precision issues
-        dtype = torch.float32 if self.device.type == "cpu" else torch.float16
+        # float16 halves memory (~3 GB vs ~6 GB for 1.5B); precision is fine
+        # for receipt extraction on all devices including CPU.
+        dtype = torch.float16
         logger.info("Using device: {} (dtype={})", self.device, dtype)
         self.tokenizer = AutoTokenizer.from_pretrained(self.config.model_name, use_fast=True)
         self.model = AutoModelForCausalLM.from_pretrained(
