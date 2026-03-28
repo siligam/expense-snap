@@ -1,0 +1,36 @@
+# Sample / test images
+samples/
+
+# Runtime directories
+bill_extractor/data/
+bill_extractor/uploads/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Env
+.env
+.venv/
+venv/
+
+# OS
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+
+# npm (not used in this project)
+package-lock.json
+
+# Local reference docs (not for version control)
+ARCHITECTURE.md
+
+# Claude
+.claude/
+site/
