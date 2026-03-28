@@ -130,11 +130,19 @@ The server must be running for `--save` to work (it POSTs to `/history`).
 
 Use a shell loop to process every JPEG in a folder:
 
-```bash
-for f in ~/receipts/*.jpg; do
-    bill-extractor extract "$f" --save
-done
-```
+=== "macOS / Linux"
+    ```bash
+    for f in ~/receipts/*.jpg; do
+        bill-extractor extract "$f" --save
+    done
+    ```
+
+=== "Windows (PowerShell)"
+    ```powershell
+    Get-ChildItem "$HOME\receipts\*.jpg" | ForEach-Object {
+        bill-extractor extract $_.FullName --save
+    }
+    ```
 
 Each file is sent to the server sequentially. Results are saved to history as they complete.
 
@@ -146,20 +154,37 @@ Each file is sent to the server sequentially. Results are saved to history as th
 
 ### Step 4 — Script with JSON output
 
-When stdout is piped, `bill-extractor extract` emits raw JSON — making it easy to use with `jq` or any other tool:
+When stdout is piped, `bill-extractor extract` emits raw JSON — making it easy to use with `jq` or any scripting tool:
 
-```bash
-# Extract just the total amount
-bill-extractor extract receipt.jpg | jq -r .total_amount
+=== "macOS / Linux"
+    ```bash
+    # Extract just the total amount  (requires jq)
+    bill-extractor extract receipt.jpg | jq -r .total_amount
 
-# Collect totals from multiple files into a CSV
-for f in ~/receipts/*.jpg; do
-    result=$(bill-extractor extract "$f")
-    date=$(echo "$result" | jq -r .date)
-    amount=$(echo "$result" | jq -r .total_amount)
-    echo "$f,$date,$amount"
-done > report.csv
-```
+    # Collect totals from multiple files into a CSV
+    for f in ~/receipts/*.jpg; do
+        result=$(bill-extractor extract "$f")
+        date=$(echo "$result" | jq -r .date)
+        amount=$(echo "$result" | jq -r .total_amount)
+        echo "$f,$date,$amount"
+    done > report.csv
+    ```
+
+=== "Windows (PowerShell)"
+    ```powershell
+    # Extract just the total amount  (ConvertFrom-Json is built into PowerShell)
+    (bill-extractor extract receipt.jpg | ConvertFrom-Json).total_amount
+
+    # Collect totals from multiple files into a CSV
+    Get-ChildItem "$HOME\receipts\*.jpg" | ForEach-Object {
+        $r = bill-extractor extract $_.FullName | ConvertFrom-Json
+        "$($_.FullName),$($r.date),$($r.total_amount)"
+    } | Set-Content report.csv
+    ```
+
+    !!! note
+        `ConvertFrom-Json` is available in PowerShell 3+ (included in Windows 8 and later).
+        No extra tools needed.
 
 ---
 
