@@ -191,13 +191,19 @@ def create_app(
                 if s.get("enabled") and s.get("url") != "local"
             ]
             if headless or not _remotes:
-                print("Loading models, please wait…")
-                loop = asyncio.get_running_loop()
-                await loop.run_in_executor(None, _load_models_sync)
-                print("Ready.\n")
+                from rich.console import Console as _Console
+                from rich.status import Status as _Status
+                _con = _Console(stderr=True)
+                with _Status("Loading models…", console=_con, spinner="dots"):
+                    loop = asyncio.get_running_loop()
+                    await loop.run_in_executor(None, _load_models_sync)
+                _con.print("[bold green]✓[/] Models ready.")
             else:
-                print(f"Remote OCR server(s): {', '.join(_remotes)}")
-                print("Models will be loaded lazily if remotes are unreachable.\n")
+                from rich.console import Console as _Console
+                _Console(stderr=True).print(
+                    f"[bold]Remote OCR server(s):[/] {', '.join(_remotes)}\n"
+                    "[dim]Models will be loaded lazily if remotes are unreachable.[/]"
+                )
 
         if _semaphore is None:
             _semaphore = asyncio.Semaphore(1)
@@ -541,6 +547,23 @@ def main():
     global _config
     _config = cfg
 
+    # Print startup panel to stderr so it doesn't interfere with JSON piping.
+    from rich.console import Console as _Console
+    from rich.table import Table as _Table
+    from rich.panel import Panel as _Panel
+    _con = _Console(stderr=True)
+    _tbl = _Table.grid(padding=(0, 2))
+    _tbl.add_column(style="dim")
+    _tbl.add_column()
+    _tbl.add_row("mode", "[bold]headless[/]" if headless else "[bold]full stack[/]")
+    _tbl.add_row("port", str(cfg.port))
+    _tbl.add_row("data dir", str(cfg.history_file.parent))
+    _servers = cfg.ocr_servers or []
+    for _s in _servers:
+        _label = "enabled" if _s.get("enabled") else "[dim]disabled[/]"
+        _tbl.add_row("ocr server", f"{_s['url']}  [{_label}]")
+    _con.print(_Panel(_tbl, title="[bold]bill-extractor[/]", border_style="blue", padding=(0, 1)))
+
     if not headless:
         import threading
         def _open_browser():
@@ -555,17 +578,25 @@ def main():
 def _run_init_cmd() -> None:
     """Download models and create data directory. Safe to re-run."""
     import subprocess, sys
+    from rich.console import Console
+    from rich.panel import Panel
+    from rich.table import Table
 
-    print("bill-extractor init")
-    print("=" * 40)
+    con = Console()
+    con.print(Panel("[bold]bill-extractor init[/]", border_style="blue", padding=(0, 1)))
 
     # 1. Config + directories (in-process — no model loading involved)
-    print("\n[1/3] Initialising configuration…")
+    con.print("\n[bold][1/3][/] Initialising configuration…")
     cfg = load_config()
     cfg.files_dir.mkdir(parents=True, exist_ok=True)
-    print(f"      data dir : {cfg.data_dir}")
-    print(f"      history  : {cfg.history_file.name}")
-    print(f"      files    : {cfg.files_dir.name}/")
+    tbl = Table.grid(padding=(0, 2))
+    tbl.add_column(style="dim")
+    tbl.add_column()
+    tbl.add_row("data dir", str(cfg.history_file.parent))
+    tbl.add_row("history", cfg.history_file.name)
+    tbl.add_row("files", cfg.files_dir.name + "/")
+    con.print(tbl)
+    con.print("[bold green]✓[/] Configuration ready.")
 
     # 2+3. Run the download script in a subprocess.
     #
@@ -573,21 +604,23 @@ def _run_init_cmd() -> None:
     # imports huggingface_hub. Once that library is imported its offline flag
     # is cached as a Python bool — no in-process override is reliable. A fresh
     # subprocess never imports bill_parser, so HF_HUB_OFFLINE is never set and
-    # downloads proceed normally. This is exactly what `uv run python
-    # download_models.py` does when called manually.
-    print("\n[2/3] Downloading OCR models (DocTR)…")
-    print("[3/3] Downloading LLM (Qwen2.5-1.5B-Instruct)…")
-    print("      (progress shown below)\n")
+    # downloads proceed normally.
+    con.print("\n[bold][2/3][/] Downloading OCR models (DocTR)…")
+    con.print("[bold][3/3][/] Downloading LLM (Qwen2.5-1.5B-Instruct)…")
+    con.print("[dim]      (progress shown below)[/]\n")
 
     download_script = Path(__file__).parent / "download_models.py"
     result = subprocess.run([sys.executable, str(download_script)])
     if result.returncode != 0:
-        print("\nDownload failed — check the output above for details.", file=sys.stderr)
+        con.print("\n[bold red]✗ Download failed[/] — check the output above for details.")
         sys.exit(result.returncode)
 
-    print("\n" + "=" * 40)
-    print("Setup complete. Start the app with:\n")
-    print("    bill-extractor serve\n")
+    con.print(Panel(
+        "[bold green]✓ Setup complete.[/]\n\nStart the app with:\n\n"
+        "    [bold]bill-extractor serve[/]",
+        border_style="green",
+        padding=(0, 1),
+    ))
 
 
 def _run_extract_cmd(file_path: str, server_url: str | None, save: bool = False) -> None:
@@ -595,15 +628,24 @@ def _run_extract_cmd(file_path: str, server_url: str | None, save: bool = False)
     import sys
     from datetime import datetime, timezone
     import httpx as _httpx
+    from rich.console import Console
+    from rich.table import Table
+    from rich.status import Status
+
+    # Use rich output only when stdout is a terminal; otherwise emit raw JSON
+    # so the command stays pipeable: bill-extractor extract file.jpg | jq .
+    pretty = sys.stdout.isatty()
+    con = Console(stderr=True)   # status/error messages always go to stderr
+    out = Console()              # result output goes to stdout
 
     path = Path(file_path)
     if not path.exists():
-        print(f"Error: file not found: {file_path}", file=sys.stderr)
+        con.print(f"[bold red]✗ Error:[/] file not found: {file_path}")
         sys.exit(1)
 
     ext = path.suffix.lower()
     if ext not in ALLOWED_EXTENSIONS:
-        print(f"Error: unsupported file type '{ext}'", file=sys.stderr)
+        con.print(f"[bold red]✗ Error:[/] unsupported file type '{ext}'")
         sys.exit(1)
 
     cfg = load_config()
@@ -616,53 +658,101 @@ def _run_extract_cmd(file_path: str, server_url: str | None, save: bool = False)
 
     for url in urls_to_try:
         try:
-            with _httpx.Client(timeout=120) as client:
-                resp = client.post(
-                    url.rstrip("/") + "/extract",
-                    files={"file": (path.name, data, _mime(ext))},
-                )
-                resp.raise_for_status()
-                result = resp.json()
+            with Status(f"Extracting [bold]{path.name}[/]…", console=con, spinner="dots"):
+                with _httpx.Client(timeout=120) as client:
+                    resp = client.post(
+                        url.rstrip("/") + "/extract",
+                        files={"file": (path.name, data, _mime(ext))},
+                    )
+                    resp.raise_for_status()
+                    result = resp.json()
+
+            if pretty:
+                _print_extract_table(out, path.name, result)
+            else:
                 print(json.dumps(result, indent=2, ensure_ascii=False))
 
-                if save:
-                    file_hash = hashlib.md5(data).hexdigest()
-                    ocr_text = result.pop("ocr_text", [])
-                    result.pop("status", None)
-                    provenance = result.pop("provenance", {})
-                    # Build generated filename from extracted fields
-                    parts = []
-                    if result.get("date"):
-                        parts.append(result["date"].replace("/", "-"))
-                    if result.get("category"):
-                        parts.append(result["category"])
-                    if result.get("meal_type"):
-                        parts.append(result["meal_type"])
-                    filename_generated = ("_".join(parts) + ext) if parts else path.name
-                    record = {
-                        "hash": file_hash,
-                        "filename": path.name,
-                        "filename_generated": filename_generated,
-                        "ocr_text": ocr_text,
-                        "result": result,
-                        "provenance": provenance,
-                        "correction": "",
-                        "action": "",
-                        "timestamp": datetime.now(timezone.utc).isoformat(),
-                    }
+            if save:
+                file_hash = hashlib.md5(data).hexdigest()
+                ocr_text = result.pop("ocr_text", [])
+                result.pop("status", None)
+                provenance = result.pop("provenance", {})
+                parts = []
+                if result.get("date"):
+                    parts.append(result["date"].replace("/", "-"))
+                if result.get("category"):
+                    parts.append(result["category"])
+                if result.get("meal_type"):
+                    parts.append(result["meal_type"])
+                filename_generated = ("_".join(parts) + ext) if parts else path.name
+                record = {
+                    "hash": file_hash,
+                    "filename": path.name,
+                    "filename_generated": filename_generated,
+                    "ocr_text": ocr_text,
+                    "result": result,
+                    "provenance": provenance,
+                    "correction": "",
+                    "action": "",
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                }
+                with _httpx.Client(timeout=30) as client:
                     save_resp = client.post(
                         url.rstrip("/") + "/history",
                         data={"record": json.dumps(record)},
                         files={"file": (path.name, data, _mime(ext))},
                     )
-                    save_resp.raise_for_status()
-                    print(f"Saved: {save_resp.json().get('original_file', path.name)}", file=sys.stderr)
-                return
+                save_resp.raise_for_status()
+                saved_name = save_resp.json().get("original_file", path.name)
+                con.print(f"[bold green]✓ Saved:[/] {saved_name}")
+            return
         except _httpx.HTTPError:
             continue
 
-    print("Error: no reachable server found.", file=sys.stderr)
+    con.print("[bold red]✗ Error:[/] no reachable server found.")
     sys.exit(1)
+
+
+def _print_extract_table(con: "Console", filename: str, result: dict) -> None:  # type: ignore[name-defined]
+    """Render extracted fields as a Rich table for human consumption."""
+    from rich.table import Table
+    from rich.panel import Panel
+
+    FIELD_LABELS = {
+        "category": "Category",
+        "meal_type": "Meal type",
+        "date": "Date",
+        "time": "Time",
+        "total_amount": "Total",
+        "currency": "Currency",
+        "tax_amount": "Tax",
+        "tip_amount": "Tip",
+        "payment_method": "Payment",
+        "establishment_name": "Establishment",
+        "transport_type": "Transport",
+        "from_location": "From",
+        "to_location": "To",
+        "hotel_name": "Hotel",
+        "check_in_date": "Check-in",
+        "check_out_date": "Check-out",
+        "num_nights": "Nights",
+        "room_rate": "Room rate",
+    }
+
+    tbl = Table.grid(padding=(0, 2))
+    tbl.add_column(style="dim", min_width=12)
+    tbl.add_column()
+
+    for key, label in FIELD_LABELS.items():
+        val = result.get(key)
+        if val not in (None, "", []):
+            tbl.add_row(label, str(val))
+
+    provenance = result.get("provenance", {})
+    if provenance.get("ocr_server"):
+        tbl.add_row("OCR server", str(provenance["ocr_server"]))
+
+    con.print(Panel(tbl, title=f"[bold]{filename}[/]", border_style="green", padding=(0, 1)))
 
 
 if __name__ == "__main__":

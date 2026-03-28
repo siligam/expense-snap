@@ -102,16 +102,22 @@ Extract a single file without the web UI:
 bill-extractor extract samples/food_01.jpeg
 ```
 
-Output:
-```json
-{
-  "category": "food",
-  "date": "24/02/2026",
-  "time": "19:55",
-  "total_amount": "63.00",
-  "currency": "INR",
-  "meal_type": "dinner"
-}
+When stdout is a terminal, results are shown as a formatted table. When piped, raw JSON is emitted so the command stays scriptable:
+
+```bash
+bill-extractor extract receipt.jpg | jq .total_amount
+```
+
+Save the result to history and `files/` (same as saving from the web UI):
+
+```bash
+bill-extractor extract receipt.jpg --save
+```
+
+Send to a specific remote server:
+
+```bash
+bill-extractor extract receipt.jpg --server http://gpu-box:8080
 ```
 
 ---

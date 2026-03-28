@@ -145,6 +145,16 @@ Use `--server` to send to a specific extraction server:
 bill-extractor extract receipt.jpg --server http://gpu-box:8080
 ```
 
+Add `--save` to persist the result to history and the `files/` folder (equivalent to saving from the web UI):
+```bash
+bill-extractor extract receipt.jpg --save
+```
+
+When stdout is a terminal, results are displayed as a formatted table. When piped, raw JSON is emitted — so scripting still works:
+```bash
+bill-extractor extract receipt.jpg | jq .total_amount
+```
+
 ---
 
 ## Data location
