@@ -2,11 +2,19 @@
 
 ## Setup
 
-```bash
-uv venv --python 3.11
-source .venv/bin/activate
-uv pip install -e ".[dev]"
-```
+=== "macOS / Linux"
+    ```bash
+    uv venv --python 3.11
+    source .venv/bin/activate
+    uv pip install -e ".[dev]"
+    ```
+
+=== "Windows (PowerShell)"
+    ```powershell
+    uv venv --python 3.11
+    .venv\Scripts\activate
+    uv pip install -e ".[dev]"
+    ```
 
 The `dev` extra installs `pytest`, `mkdocs`, and `mkdocs-material`.
 

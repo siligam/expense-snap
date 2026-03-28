@@ -12,23 +12,31 @@
 
 [uv](https://docs.astral.sh/uv/) is the recommended way to install Bill Extractor. It handles Python versions and dependencies in one tool with no separate conda or pyenv setup needed.
 
-```bash
-# macOS / Linux
-curl -LsSf https://astral.sh/uv/install.sh | sh
+=== "macOS / Linux"
+    ```bash
+    curl -LsSf https://astral.sh/uv/install.sh | sh
+    ```
 
-# Windows (PowerShell)
-powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
-```
+=== "Windows (PowerShell)"
+    ```powershell
+    powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+    ```
 
 ### 2. Create an environment and install
 
-```bash
-uv venv --python 3.11
-source .venv/bin/activate        # macOS / Linux
-# .venv\Scripts\activate         # Windows
+=== "macOS / Linux"
+    ```bash
+    uv venv --python 3.11
+    source .venv/bin/activate
+    uv pip install -e .
+    ```
 
-uv pip install -e .
-```
+=== "Windows (PowerShell)"
+    ```powershell
+    uv venv --python 3.11
+    .venv\Scripts\activate
+    uv pip install -e .
+    ```
 
 !!! warning "Linux without an NVIDIA GPU"
     On Linux, the standard `torch` wheel from PyPI includes CUDA libraries by default (~1.5 GB extra).
