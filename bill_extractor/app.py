@@ -1,351 +1,758 @@
 from __future__ import annotations
 
-import csv
-import hashlib
-import io
+import asyncio
 import json
+import logging
 import os
-import zipfile
-from datetime import datetime
+import tempfile
+import webbrowser
+from contextlib import asynccontextmanager
 from pathlib import Path
-
-from flask import Flask, jsonify, render_template, request, send_file, send_from_directory
 
 os.environ["HF_HUB_OFFLINE"] = "1"
 os.environ["TRANSFORMERS_VERBOSITY"] = "error"
 
-from .bill_parser import BillingInformationExtractor
+import httpx
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse, Response
+from loguru import logger
+
+# Stdlib logger — routed through _InterceptHandler into loguru.
+# Used for log calls inside async request handlers where direct loguru
+# calls are silently dropped on Linux (async context after yield).
+_log = logging.getLogger(__name__)
+
+_BASE_DIR = Path(__file__).parent
+
+from .bill_parser import BillingInformationExtractor, BillingExtractionConfig
+from .config import Config, load_config
+from .history import HistoryStore
 from .ocr_reader import process as ocr_process
 
-BASE_DIR = Path(__file__).parent
-DATA_DIR = BASE_DIR / "data"
-UPLOADS_DIR = BASE_DIR / "uploads"
-CACHE_FILE = DATA_DIR / "cache.json"
-HISTORY_FILE = DATA_DIR / "history.json"
+try:
+    from doctr import __version__ as _DOCTR_VERSION  # type: ignore[import]
+except Exception:
+    _DOCTR_VERSION = None
 
-DATA_DIR.mkdir(exist_ok=True)
-UPLOADS_DIR.mkdir(exist_ok=True)
-
-app = Flask(__name__, template_folder="templates")
-
-print("Loading models, please wait...")
-extractor = BillingInformationExtractor()
-print("Ready.\n")
-
+_DEFAULT_MODEL_NAME: str = BillingExtractionConfig().model_name
 
 # ---------------------------------------------------------------------------
-# Persistence helpers
+# Favicon (blue rounded square + white receipt with zigzag tear bottom)
 # ---------------------------------------------------------------------------
 
-def _load(path: Path, default):
-    if path.exists():
+_FAVICON_SVG: bytes = (
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">'
+    '<rect width="32" height="32" rx="7" fill="#3b82f6"/>'
+    '<path d="M9 5h14v20l-2-2-2 2-2-2-2 2-2-2-2 2-2-2V5z" fill="white"/>'
+    '<rect x="12" y="9" width="8" height="2" rx="1" fill="#bfdbfe"/>'
+    '<rect x="12" y="13" width="8" height="2" rx="1" fill="#bfdbfe"/>'
+    '<rect x="12" y="17" width="5" height="2" rx="1" fill="#bfdbfe"/>'
+    "</svg>"
+).encode()
+
+# ---------------------------------------------------------------------------
+# Logging helpers
+# ---------------------------------------------------------------------------
+
+class _InterceptHandler(logging.Handler):
+    """Route stdlib logging (uvicorn, etc.) through loguru."""
+
+    def emit(self, record: logging.LogRecord) -> None:
         try:
-            return json.loads(path.read_text(encoding="utf-8"))
-        except Exception:
-            pass
-    return default
+            level = logger.level(record.levelname).name
+        except ValueError:
+            level = record.levelno
+        frame, depth = logging.currentframe(), 2
+        while frame and frame.f_code.co_filename == logging.__file__:
+            frame = frame.f_back  # type: ignore[assignment]
+            depth += 1
+        logger.opt(depth=depth, exception=record.exc_info).log(level, record.getMessage())
 
 
-def _save(path: Path, data) -> None:
-    path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+def _setup_logging(log_path: Path) -> None:
+    """Configure loguru sinks and intercept all stdlib logging."""
+    log_path.parent.mkdir(parents=True, exist_ok=True)
 
+    logger.remove()  # remove the default stderr sink
 
-def _hash(data: bytes) -> str:
-    return hashlib.md5(data).hexdigest()
-
-
-def _load_history_flat() -> list:
-    """Load history as a flat list, migrating from old session-based format if needed."""
-    raw = _load(HISTORY_FILE, [])
-    if not raw:
-        return []
-    # Detect old format: list of sessions (each has an 'items' key)
-    if isinstance(raw[0], dict) and "items" in raw[0]:
-        flat = []
-        seen = set()
-        for session in raw:
-            for item in session.get("items", []):
-                h = item.get("hash")
-                if h and h not in seen:
-                    seen.add(h)
-                    flat.append(item)
-        _save(HISTORY_FILE, flat)  # migrate in place
-        return flat
-    return raw
-
-
-def _find_in_cache(h: str) -> dict | None:
-    for item in _load(CACHE_FILE, []):
-        if item.get("hash") == h:
-            return item
-    return None
-
-
-def _make_filename(result: dict, original_ext: str, uploads_dir: Path) -> str:
-    """Generate a human-readable filename from extracted fields."""
-    date_raw  = (result.get("date") or "").strip()
-    # For hotel bills, fall back to check-in date when date is absent
-    if not date_raw and result.get("category", "").lower() == "hotel":
-        date_raw = (result.get("check_in") or "").strip()
-    category  = (result.get("category") or "unknown").lower().strip()
-    meal_type = (result.get("meal_type") or "").lower().strip()
-
-    date_part = date_raw.replace("/", "-") if date_raw else "unknown-date"
-    cat_part  = f"{category}_{meal_type}" if meal_type and meal_type != "unknown" else category
-
-    ext  = original_ext if original_ext.startswith(".") else f".{original_ext}"
-    base = f"{date_part}_{cat_part}"
-    stem = base
-    counter = 1
-    while (uploads_dir / f"{stem}{ext}").exists():
-        counter += 1
-        stem = f"{base}_{counter}"
-    return f"{stem}{ext}"
-
-
-def _parse_plain_text(text: str) -> dict:
-    """Parse key: value plain-text correction back into a dict."""
-    result: dict = {}
-    for line in text.splitlines():
-        idx = line.find(":")
-        if idx > 0:
-            key = line[:idx].strip().lower().replace(" ", "_")
-            val = line[idx + 1:].strip()
-            result[key] = val
-    return result
-
-
-def _find_in_history(h: str) -> dict | None:
-    for item in _load_history_flat():
-        if item.get("hash") == h:
-            return item
-    return None
-
-
-# ---------------------------------------------------------------------------
-# Routes
-# ---------------------------------------------------------------------------
-
-@app.route("/")
-def index():
-    return render_template("index.html")
-
-
-@app.route("/uploads/<filename>")
-def serve_upload(filename: str):
-    return send_from_directory(UPLOADS_DIR, filename)
-
-
-@app.route("/api/process", methods=["POST"])
-def process():
-    file = request.files.get("image")
-    if not file:
-        return jsonify({"error": "No file provided"}), 400
-
-    image_bytes = file.read()
-    image_hash = _hash(image_bytes)
-    original_name = file.filename or "image.jpeg"
-
-    # Check cache
-    cached = _find_in_cache(image_hash)
-    if cached:
-        return jsonify({**cached, "source": "cache"})
-
-    # Check history
-    from_history = _find_in_history(image_hash)
-    if from_history:
-        cache = _load(CACHE_FILE, [])
-        if not any(i.get("hash") == image_hash for i in cache):
-            cache.append(from_history)
-            _save(CACHE_FILE, cache)
-        return jsonify({**from_history, "source": "history"})
-
-    # Save image temporarily with hash name, then rename after extraction
-    ext = Path(original_name).suffix or ".jpeg"
-    tmp_path = UPLOADS_DIR / f"{image_hash}{ext}"
-    tmp_path.write_bytes(image_bytes)
-
-    # OCR + extract
-    try:
-        ocr_lines = ocr_process(str(tmp_path))
-        result = extractor.extract(ocr_lines)
-        status = "ok"
-    except Exception as exc:
-        ocr_lines = []
-        result = {}
-        status = f"error: {exc}"
-
-    # Rename to human-readable filename
-    generated_name = _make_filename(result, ext, UPLOADS_DIR)
-    final_path = UPLOADS_DIR / generated_name
-    tmp_path.rename(final_path)
-
-    item = {
-        "hash": image_hash,
-        "filename": original_name,
-        "filename_generated": generated_name,
-        "image_url": f"/uploads/{generated_name}",
-        "ocr_text": ocr_lines,
-        "result": result,
-        "timestamp": datetime.now().isoformat(timespec="seconds"),
-        "status": status,
-    }
-
-    cache = _load(CACHE_FILE, [])
-    cache.append(item)
-    _save(CACHE_FILE, cache)
-
-    return jsonify({**item, "source": "new"})
-
-
-@app.route("/api/cache", methods=["GET"])
-def get_cache():
-    return jsonify(_load(CACHE_FILE, []))
-
-
-@app.route("/api/history", methods=["GET"])
-def get_history():
-    return jsonify(_load_history_flat())
-
-
-@app.route("/api/cache/<item_hash>", methods=["DELETE"])
-def delete_cache_item(item_hash: str):
-    cache = _load(CACHE_FILE, [])
-    cache = [i for i in cache if i.get("hash") != item_hash]
-    _save(CACHE_FILE, cache)
-    return jsonify({"ok": True})
-
-
-@app.route("/api/history/<item_hash>", methods=["DELETE"])
-def delete_history_item(item_hash: str):
-    history = _load_history_flat()
-    history = [i for i in history if i.get("hash") != item_hash]
-    _save(HISTORY_FILE, history)
-    return jsonify({"ok": True})
-
-
-@app.route("/api/history", methods=["DELETE"])
-def clear_history():
-    _save(HISTORY_FILE, [])
-    return jsonify({"ok": True})
-
-
-@app.route("/api/item/<item_hash>", methods=["PATCH"])
-def update_item(item_hash: str):
-    body = request.get_json(silent=True) or {}
-
-    def _patch(item):
-        if "action" in body:
-            item["action"] = body["action"]
-        if "correction" in body:
-            item["correction"] = body["correction"]
-        return item
-
-    cache = _load(CACHE_FILE, [])
-    cache_changed = False
-    for item in cache:
-        if item.get("hash") == item_hash:
-            _patch(item)
-            cache_changed = True
-            break
-    if cache_changed:
-        _save(CACHE_FILE, cache)
-
-    history = _load_history_flat()
-    hist_changed = False
-    for item in history:
-        if item.get("hash") == item_hash:
-            _patch(item)
-            hist_changed = True
-            break
-    if hist_changed:
-        _save(HISTORY_FILE, history)
-
-    return jsonify({"ok": True})
-
-
-@app.route("/api/reset", methods=["POST"])
-def reset():
-    cache = _load(CACHE_FILE, [])
-    if cache:
-        history = _load_history_flat()
-        existing_hashes = {i.get("hash") for i in history}
-        new_items = [i for i in cache if i.get("hash") not in existing_hashes]
-        if new_items:
-            # Prepend new items (newest first)
-            _save(HISTORY_FILE, new_items + history)
-        added = len(new_items)
-    else:
-        added = 0
-    _save(CACHE_FILE, [])
-    return jsonify({"ok": True, "added": added})
-
-
-@app.route("/api/export", methods=["POST"])
-def export_items():
-    body   = request.get_json(silent=True) or {}
-    hashes = set(body.get("hashes", []))
-
-    # Search both cache and history so the export works from either tab
-    all_items = _load(CACHE_FILE, []) + _load_history_flat()
-    seen: set = set()
-    selected: list = []
-    for item in all_items:
-        h = item.get("hash")
-        if h in hashes and h not in seen:
-            seen.add(h)
-            selected.append(item)
-
-    buf = io.BytesIO()
-    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
-        # Images
-        for item in selected:
-            generated = item.get("filename_generated", "")
-            img_path  = UPLOADS_DIR / generated if generated else None
-            if img_path is None or not img_path.exists():
-                # Legacy hash-named file
-                for ext in (".jpeg", ".jpg", ".png", ".webp", ".pdf"):
-                    p = UPLOADS_DIR / f"{item['hash']}{ext}"
-                    if p.exists():
-                        img_path = p
-                        break
-            if img_path and img_path.exists():
-                zf.write(img_path, generated or img_path.name)
-
-        # summary.csv
-        csv_buf = io.StringIO()
-        writer  = csv.writer(csv_buf)
-        writer.writerow(["Filename", "Date", "Category", "Amount", "Currency"])
-        for item in selected:
-            result     = dict(item.get("result") or {})
-            correction = item.get("correction", "")
-            if correction:
-                result.update(_parse_plain_text(correction))
-
-            cat  = result.get("category", "")
-            meal = (result.get("meal_type") or "").lower().strip()
-            cat_col = f"{cat}_{meal}" if meal and meal != "unknown" else cat
-
-            writer.writerow([
-                item.get("filename_generated") or item.get("filename", ""),
-                result.get("date", ""),
-                cat_col,
-                result.get("total_amount") or result.get("amount", ""),
-                result.get("currency", ""),
-            ])
-        zf.writestr("summary.csv", csv_buf.getvalue())
-
-    buf.seek(0)
-    return send_file(
-        buf,
-        mimetype="application/zip",
-        as_attachment=True,
-        download_name="bills_export.zip",
+    # Console — coloured, human-readable
+    logger.add(
+        lambda msg: print(msg, end=""),
+        colorize=True,
+        format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> <level>{level: <8}</level> {name}: {message}",
+        level="INFO",
     )
 
+    # Rotating file — enqueue=True offloads writes to a background thread,
+    # which is required for reliable logging from async request handlers on Linux.
+    logger.add(
+        str(log_path),
+        rotation="5 MB",
+        retention=3,
+        encoding="utf-8",
+        format="{time:YYYY-MM-DD HH:mm:ss} {level: <8} {name}: {message}",
+        level="INFO",
+        enqueue=True,
+    )
+
+    # Intercept uvicorn / httpx / everything else that uses stdlib logging
+    logging.basicConfig(handlers=[_InterceptHandler()], level=logging.DEBUG, force=True)
+    for name in ("uvicorn", "uvicorn.error", "uvicorn.access", "uvicorn.lifespan"):
+        logging.getLogger(name).handlers = [_InterceptHandler()]
+        logging.getLogger(name).propagate = False
+
+
+# ---------------------------------------------------------------------------
+# Global state — initialised once at startup via lifespan
+# ---------------------------------------------------------------------------
+
+_extractor: BillingInformationExtractor | None = None
+_semaphore: asyncio.Semaphore | None = None
+_store: HistoryStore | None = None
+_config: Config | None = None
+_lazy_loading = False          # True while models are loading in background
+_lazy_load_event: asyncio.Event | None = None
+_ocr_rr_idx = 0               # round-robin cursor for remote OCR servers
+
+ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".pdf"}
+
+
+# ---------------------------------------------------------------------------
+# Model helpers
+# ---------------------------------------------------------------------------
+
+def _load_models_sync() -> None:
+    global _extractor
+    _extractor = BillingInformationExtractor()
+
+
+async def _ensure_models() -> None:
+    """Lazy-load models on first fallback request.
+
+    Returns immediately if already loaded (or mocked in tests).
+    Raises 503 while initial load is in progress.
+    """
+    global _lazy_loading, _lazy_load_event, _extractor, _semaphore
+    if _extractor is not None:
+        return  # already loaded (or mocked in tests)
+
+    loop = asyncio.get_running_loop()
+
+    if _lazy_loading:
+        assert _lazy_load_event is not None
+        await asyncio.wait_for(_lazy_load_event.wait(), timeout=120)
+        return
+
+    # First call triggers the load
+    _lazy_loading = True
+    _lazy_load_event = asyncio.Event()
+    _semaphore = asyncio.Semaphore(1)
+
+    try:
+        await loop.run_in_executor(None, _load_models_sync)
+    finally:
+        _lazy_loading = False
+        _lazy_load_event.set()
+
+
+# ---------------------------------------------------------------------------
+# App factory
+# ---------------------------------------------------------------------------
+
+def create_app(
+    headless: bool = False,
+    cfg: Config | None = None,
+) -> FastAPI:
+    """Create and return the FastAPI app.
+
+    headless=True  → /extract only (remote GPU server mode)
+    headless=False → full stack: /extract + history/file/storage routes + UI
+    """
+
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        global _extractor, _semaphore, _store, _config
+
+        # Config (may already be set, e.g. from CLI args)
+        if _config is None:
+            _config = cfg or load_config()
+
+        if not headless and _store is None:
+            _store = HistoryStore(_config.history_file, _config.files_dir)
+
+        # Model loading policy:
+        # - headless: always eager (serve is a GPU node)
+        # - no enabled remote servers: eager (local models always needed)
+        # - remote servers configured: skip startup load (lazy fallback only)
+        if _extractor is None:  # allow tests to mock before lifespan runs
+            _remotes = [
+                s["url"] for s in _config.ocr_servers
+                if s.get("enabled") and s.get("url") != "local"
+            ]
+            if headless or not _remotes:
+                from rich.console import Console as _Console
+                from rich.status import Status as _Status
+                _con = _Console(stderr=True)
+                with _Status("Loading models…", console=_con, spinner="dots"):
+                    loop = asyncio.get_running_loop()
+                    await loop.run_in_executor(None, _load_models_sync)
+                _con.print("[bold green]✓[/] Models ready.")
+            else:
+                from rich.console import Console as _Console
+                _Console(stderr=True).print(
+                    f"[bold]Remote OCR server(s):[/] {', '.join(_remotes)}\n"
+                    "[dim]Models will be loaded lazily if remotes are unreachable.[/]"
+                )
+
+        if _semaphore is None:
+            _semaphore = asyncio.Semaphore(1)
+
+        _setup_logging(_config.history_file.parent / "bill_extractor.log")
+
+        yield
+
+    _origins_env = os.environ.get("ALLOWED_ORIGINS", "*")
+    allowed_origins = [o.strip() for o in _origins_env.split(",")]
+
+    app = FastAPI(
+        title="Bill Extractor",
+        version="0.5.0",
+        lifespan=lifespan,
+    )
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=allowed_origins,
+        allow_origin_regex=r".*" if "*" in allowed_origins else None,
+        allow_methods=["GET", "POST", "PATCH", "DELETE"],
+        allow_headers=["*"],
+    )
+
+    # ----------------------------------------------------------------
+    # Routes — always registered
+    # ----------------------------------------------------------------
+
+    @app.get("/favicon.ico", include_in_schema=False)
+    async def favicon():
+        return Response(content=_FAVICON_SVG, media_type="image/svg+xml")
+
+    @app.get("/health")
+    async def health():
+        return {
+            "status": "ok",
+            "model_loaded": _extractor is not None,
+            "headless": headless,
+        }
+
+    @app.post("/extract")
+    async def extract(file: UploadFile = File(...)):
+        from datetime import datetime, timezone
+        submitted_at = datetime.now(timezone.utc).isoformat()
+
+        ext = Path(file.filename or "upload").suffix.lower()
+        if ext not in ALLOWED_EXTENSIONS:
+            raise HTTPException(
+                status_code=415,
+                detail=f"Unsupported file type '{ext}'. Allowed: {', '.join(sorted(ALLOWED_EXTENSIONS))}",
+            )
+
+        contents = await file.read()
+        if not contents:
+            raise HTTPException(status_code=400, detail="Uploaded file is empty.")
+
+        # Round-robin across all enabled servers (local + remote)
+        global _ocr_rr_idx
+        _servers = _config.ocr_servers if _config else []
+        pool = [s["url"] for s in _servers if s.get("enabled")]
+
+        if not pool:
+            raise HTTPException(status_code=503, detail="No OCR servers configured.")
+
+        # Grab and advance the index before any await so concurrent requests
+        # each get a distinct starting position (no yield point between read and write).
+        start = _ocr_rr_idx % len(pool)
+        _ocr_rr_idx = (start + 1) % len(pool)
+        for i in range(len(pool)):
+            url = pool[(start + i) % len(pool)]
+
+            if url == "local":
+                await _ensure_models()
+                tmp = tempfile.NamedTemporaryFile(suffix=ext, delete=False)
+                try:
+                    tmp.write(contents)
+                    tmp.close()
+                    async with _semaphore:
+                        loop = asyncio.get_running_loop()
+                        ocr_lines, result = await loop.run_in_executor(
+                            None, _run_inference, tmp.name
+                        )
+                except HTTPException:
+                    raise
+                except Exception as exc:
+                    raise HTTPException(
+                        status_code=500, detail=f"Extraction failed: {exc}"
+                    ) from exc
+                finally:
+                    Path(tmp.name).unlink(missing_ok=True)
+                completed_at = datetime.now(timezone.utc).isoformat()
+                _log.info("extract: %s  server=local", file.filename or "upload")
+                return {"ocr_text": ocr_lines, **result, "status": "ok",
+                        "provenance": _make_provenance(submitted_at, completed_at, "local")}
+            else:
+                try:
+                    ocr_lines, result = await _proxy_extract(
+                        url, file.filename or "upload", ext, contents
+                    )
+                    completed_at = datetime.now(timezone.utc).isoformat()
+                    _log.info("extract: %s  server=%s", file.filename or "upload", url)
+                    return {"ocr_text": ocr_lines, **result, "status": "ok",
+                            "provenance": _make_provenance(submitted_at, completed_at, url)}
+                except httpx.HTTPError:
+                    continue  # server unreachable — try next in pool
+
+        raise HTTPException(status_code=503, detail="No OCR servers reachable.")
+
+    # ----------------------------------------------------------------
+    # Routes — full-stack only (history + file serving + UI)
+    # ----------------------------------------------------------------
+
+    if not headless:
+
+        @app.get("/")
+        async def index():
+            return FileResponse(_BASE_DIR / "templates" / "index.html")
+
+        @app.get("/history")
+        async def get_history():
+            return _store.all()
+
+        @app.post("/history")
+        async def post_history(
+            record: str = Form(...),
+            file: UploadFile | None = File(default=None),
+        ):
+            try:
+                rec = json.loads(record)
+            except json.JSONDecodeError as exc:
+                raise HTTPException(status_code=422, detail=f"Invalid JSON in record: {exc}")
+
+            if file and file.filename:
+                data = await file.read()
+                if data:
+                    ext = Path(file.filename).suffix.lower()
+                    # Prefer the human-readable generated name so files/ is browsable
+                    generated = rec.get("filename_generated", "")
+                    stem = Path(generated).stem if generated else rec.get("hash", "unknown")
+                    # Collision avoidance: append _2, _3, … if the name already exists
+                    fname = f"{stem}{ext}"
+                    counter = 1
+                    while _store.get_file_path(fname) is not None:
+                        counter += 1
+                        fname = f"{stem}_{counter}{ext}"
+                    _store.save_file(fname, data)
+                    rec["original_file"] = fname
+
+            saved = _store.upsert(rec)
+            return saved
+
+        @app.delete("/history/{hash_}")
+        async def delete_history(hash_: str):
+            rec = _store.get(hash_)
+            if rec and rec.get("original_file"):
+                _store.delete_file(rec["original_file"])
+            deleted = _store.delete(hash_)
+            if not deleted:
+                raise HTTPException(status_code=404, detail="Record not found.")
+            return {"status": "deleted", "hash": hash_}
+
+        @app.get("/files/{filename}")
+        async def get_file(filename: str):
+            # Prevent path traversal
+            if "/" in filename or "\\" in filename or ".." in filename:
+                raise HTTPException(status_code=400, detail="Invalid filename.")
+            p = _store.get_file_path(filename)
+            if p is None:
+                raise HTTPException(status_code=404, detail="File not found.")
+            return FileResponse(str(p))
+
+        @app.get("/storage")
+        async def storage():
+            return _store.disk_usage()
+
+        @app.get("/config")
+        async def get_config():
+            return {
+                "data_dir": str(_config.data_dir),
+                "ocr_servers": _config.ocr_servers,
+                "port": _config.port,
+            }
+
+        @app.patch("/config")
+        async def patch_config(body: dict):
+            allowed = {"ocr_servers", "data_dir"}
+            unknown = set(body) - allowed
+            if unknown:
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"Read-only or unknown fields: {', '.join(sorted(unknown))}. "
+                           f"Editable: {', '.join(sorted(allowed))}.",
+                )
+            if "ocr_servers" in body:
+                servers = body["ocr_servers"]
+                if not isinstance(servers, list):
+                    raise HTTPException(status_code=422, detail="ocr_servers must be a list.")
+                # Ensure local entry is always present
+                if not any(s.get("url") == "local" for s in servers):
+                    servers = [{"url": "local", "enabled": True}] + servers
+                _config.ocr_servers = servers
+            if "data_dir" in body:
+                new_dir = Path(os.path.expanduser(str(body["data_dir"])))
+                new_dir.mkdir(parents=True, exist_ok=True)
+                _config.history_file = new_dir / "history.json"
+                _config.files_dir = new_dir / "files"
+                # Swap the store immediately — no restart needed.
+                # Existing data remains at the old location; the user migrates manually.
+                global _store
+                _store = HistoryStore(_config.history_file, _config.files_dir)
+            # Persist atomically to config.json in the (possibly new) data_dir
+            cfg_path = _config.history_file.parent / "config.json"
+            persisted = {
+                "history_file": str(_config.history_file),
+                "files_dir": str(_config.files_dir),
+                "ocr_servers": _config.ocr_servers,
+                "port": _config.port,
+            }
+            tmp = cfg_path.with_suffix(".tmp")
+            tmp.write_text(json.dumps(persisted, indent=2) + "\n")
+            tmp.replace(cfg_path)
+            return {
+                "data_dir": str(_config.data_dir),
+                "ocr_servers": _config.ocr_servers,
+                "port": _config.port,
+            }
+
+    return app
+
+
+# ---------------------------------------------------------------------------
+# Blocking inference helper
+# ---------------------------------------------------------------------------
+
+def _make_provenance(submitted_at: str, completed_at: str, ocr_server: str) -> dict:
+    """Build the provenance block attached to every extraction result."""
+    return {
+        "submitted_at": submitted_at,
+        "completed_at": completed_at,
+        "ocr_server": ocr_server,
+        "doctr_version": _DOCTR_VERSION,
+        "model_name": _extractor.config.model_name if _extractor else _DEFAULT_MODEL_NAME,
+    }
+
+
+def _run_inference(file_path: str) -> tuple[list[str], dict]:
+    ocr_lines = ocr_process(file_path)
+    result = _extractor.extract(ocr_lines)
+    return ocr_lines, result
+
+
+# ---------------------------------------------------------------------------
+# Remote proxy helper
+# ---------------------------------------------------------------------------
+
+async def _proxy_extract(
+    base_url: str,
+    filename: str,
+    ext: str,
+    contents: bytes,
+) -> tuple[list[str], dict]:
+    url = base_url.rstrip("/") + "/extract"
+    async with httpx.AsyncClient(timeout=60) as client:
+        resp = await client.post(
+            url,
+            files={"file": (filename, contents, _mime(ext))},
+        )
+        resp.raise_for_status()
+    data = resp.json()
+    ocr_lines = data.pop("ocr_text", [])
+    data.pop("status", None)
+    return ocr_lines, data
+
+
+def _mime(ext: str) -> str:
+    return {
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".png": "image/png",
+        ".webp": "image/webp",
+        ".pdf": "application/pdf",
+    }.get(ext, "application/octet-stream")
+
+
+# ---------------------------------------------------------------------------
+# Module-level app (used by uvicorn and tests)
+# ---------------------------------------------------------------------------
+
+app = create_app()
+
+
+# ---------------------------------------------------------------------------
+# Entry point
+# ---------------------------------------------------------------------------
 
 def main():
-    app.run(debug=False, host="0.0.0.0", port=8080)
+    import argparse
+    import uvicorn
+
+    parser = argparse.ArgumentParser(prog="bill-extractor")
+    sub = parser.add_subparsers(dest="cmd")
+
+    serve_p = sub.add_parser("serve", help="Start the server")
+    serve_p.add_argument("--headless", action="store_true", help="OCR endpoint only")
+    serve_p.add_argument("--port", type=int, default=None)
+    serve_p.add_argument("--ocr-url", dest="ocr_url", default=None)
+
+    extract_p = sub.add_parser("extract", help="Extract a single file")
+    extract_p.add_argument("file", help="Path to image or PDF")
+    extract_p.add_argument("--server", default=None, help="Remote server URL")
+    extract_p.add_argument("--save", action="store_true", help="Save result to history and files/")
+
+    sub.add_parser("init", help="Download models and initialise data directory (run once after install)")
+
+    args = parser.parse_args()
+
+    if args.cmd == "extract":
+        import sys
+        _run_extract_cmd(args.file, args.server, save=args.save)
+        sys.exit(0)
+
+    if args.cmd == "init":
+        import sys
+        _run_init_cmd()
+        sys.exit(0)
+
+    # Default: serve
+    cfg = load_config()
+    if args.cmd == "serve":
+        if args.port:
+            cfg.port = args.port
+        if args.ocr_url:
+            cfg.ocr_servers = [
+                {"url": "local", "enabled": False},
+                {"url": args.ocr_url, "enabled": True},
+            ]
+        headless = args.headless
+    else:
+        headless = False
+
+    global _config
+    _config = cfg
+
+    # Print startup panel to stderr so it doesn't interfere with JSON piping.
+    from rich.console import Console as _Console
+    from rich.table import Table as _Table
+    from rich.panel import Panel as _Panel
+    _con = _Console(stderr=True)
+    _tbl = _Table.grid(padding=(0, 2))
+    _tbl.add_column(style="dim")
+    _tbl.add_column()
+    _tbl.add_row("mode", "[bold]headless[/]" if headless else "[bold]full stack[/]")
+    _tbl.add_row("port", str(cfg.port))
+    _tbl.add_row("data dir", str(cfg.history_file.parent))
+    _servers = cfg.ocr_servers or []
+    for _s in _servers:
+        _label = "enabled" if _s.get("enabled") else "[dim]disabled[/]"
+        _tbl.add_row("ocr server", f"{_s['url']}  [{_label}]")
+    _con.print(_Panel(_tbl, title="[bold]bill-extractor[/]", border_style="blue", padding=(0, 1)))
+
+    if not headless:
+        import threading
+        def _open_browser():
+            import time; time.sleep(1.5)
+            webbrowser.open(f"http://localhost:{cfg.port}")
+        threading.Thread(target=_open_browser, daemon=True).start()
+
+    target_app = create_app(headless=headless, cfg=cfg)
+    uvicorn.run(target_app, host="0.0.0.0", port=cfg.port, reload=False, log_config=None)
+
+
+def _run_init_cmd() -> None:
+    """Download models and create data directory. Safe to re-run."""
+    import subprocess, sys
+    from rich.console import Console
+    from rich.panel import Panel
+    from rich.table import Table
+
+    con = Console()
+    con.print(Panel("[bold]bill-extractor init[/]", border_style="blue", padding=(0, 1)))
+
+    # 1. Config + directories (in-process — no model loading involved)
+    con.print("\n[bold][1/3][/] Initialising configuration…")
+    cfg = load_config()
+    cfg.files_dir.mkdir(parents=True, exist_ok=True)
+    tbl = Table.grid(padding=(0, 2))
+    tbl.add_column(style="dim")
+    tbl.add_column()
+    tbl.add_row("data dir", str(cfg.history_file.parent))
+    tbl.add_row("history", cfg.history_file.name)
+    tbl.add_row("files", cfg.files_dir.name + "/")
+    con.print(tbl)
+    con.print("[bold green]✓[/] Configuration ready.")
+
+    # 2+3. Run the download script in a subprocess.
+    #
+    # bill_parser.py sets HF_HUB_OFFLINE in the environment before anything
+    # imports huggingface_hub. Once that library is imported its offline flag
+    # is cached as a Python bool — no in-process override is reliable. A fresh
+    # subprocess never imports bill_parser, so HF_HUB_OFFLINE is never set and
+    # downloads proceed normally.
+    con.print("\n[bold][2/3][/] Downloading OCR models (DocTR)…")
+    con.print("[bold][3/3][/] Downloading LLM (Qwen2.5-1.5B-Instruct)…")
+    con.print("[dim]      (progress shown below)[/]\n")
+
+    download_script = Path(__file__).parent / "download_models.py"
+    result = subprocess.run([sys.executable, str(download_script)])
+    if result.returncode != 0:
+        con.print("\n[bold red]✗ Download failed[/] — check the output above for details.")
+        sys.exit(result.returncode)
+
+    con.print(Panel(
+        "[bold green]✓ Setup complete.[/]\n\nStart the app with:\n\n"
+        "    [bold]bill-extractor serve[/]",
+        border_style="green",
+        padding=(0, 1),
+    ))
+
+
+def _run_extract_cmd(file_path: str, server_url: str | None, save: bool = False) -> None:
+    import hashlib
+    import sys
+    from datetime import datetime, timezone
+    import httpx as _httpx
+    from rich.console import Console
+    from rich.table import Table
+    from rich.status import Status
+
+    # Use rich output only when stdout is a terminal; otherwise emit raw JSON
+    # so the command stays pipeable: bill-extractor extract file.jpg | jq .
+    pretty = sys.stdout.isatty()
+    con = Console(stderr=True)   # status/error messages always go to stderr
+    out = Console()              # result output goes to stdout
+
+    path = Path(file_path)
+    if not path.exists():
+        con.print(f"[bold red]✗ Error:[/] file not found: {file_path}")
+        sys.exit(1)
+
+    ext = path.suffix.lower()
+    if ext not in ALLOWED_EXTENSIONS:
+        con.print(f"[bold red]✗ Error:[/] unsupported file type '{ext}'")
+        sys.exit(1)
+
+    cfg = load_config()
+    urls_to_try: list[str] = []
+    if server_url:
+        urls_to_try.append(server_url)
+    urls_to_try.append(f"http://localhost:{cfg.port}")
+
+    data = path.read_bytes()
+
+    for url in urls_to_try:
+        try:
+            with Status(f"Extracting [bold]{path.name}[/]…", console=con, spinner="dots"):
+                with _httpx.Client(timeout=120) as client:
+                    resp = client.post(
+                        url.rstrip("/") + "/extract",
+                        files={"file": (path.name, data, _mime(ext))},
+                    )
+                    resp.raise_for_status()
+                    result = resp.json()
+
+            if pretty:
+                _print_extract_table(out, path.name, result)
+            else:
+                print(json.dumps(result, indent=2, ensure_ascii=False))
+
+            if save:
+                file_hash = hashlib.md5(data).hexdigest()
+                ocr_text = result.pop("ocr_text", [])
+                result.pop("status", None)
+                provenance = result.pop("provenance", {})
+                parts = []
+                if result.get("date"):
+                    parts.append(result["date"].replace("/", "-"))
+                if result.get("category"):
+                    parts.append(result["category"])
+                if result.get("meal_type"):
+                    parts.append(result["meal_type"])
+                filename_generated = ("_".join(parts) + ext) if parts else path.name
+                record = {
+                    "hash": file_hash,
+                    "filename": path.name,
+                    "filename_generated": filename_generated,
+                    "ocr_text": ocr_text,
+                    "result": result,
+                    "provenance": provenance,
+                    "correction": "",
+                    "action": "",
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                }
+                with _httpx.Client(timeout=30) as client:
+                    save_resp = client.post(
+                        url.rstrip("/") + "/history",
+                        data={"record": json.dumps(record)},
+                        files={"file": (path.name, data, _mime(ext))},
+                    )
+                save_resp.raise_for_status()
+                saved_name = save_resp.json().get("original_file", path.name)
+                con.print(f"[bold green]✓ Saved:[/] {saved_name}")
+            return
+        except _httpx.HTTPError:
+            continue
+
+    con.print("[bold red]✗ Error:[/] no reachable server found.")
+    sys.exit(1)
+
+
+def _print_extract_table(con: "Console", filename: str, result: dict) -> None:  # type: ignore[name-defined]
+    """Render extracted fields as a Rich table for human consumption."""
+    from rich.table import Table
+    from rich.panel import Panel
+
+    FIELD_LABELS = {
+        "category": "Category",
+        "meal_type": "Meal type",
+        "date": "Date",
+        "time": "Time",
+        "total_amount": "Total",
+        "currency": "Currency",
+        "tax_amount": "Tax",
+        "tip_amount": "Tip",
+        "payment_method": "Payment",
+        "establishment_name": "Establishment",
+        "transport_type": "Transport",
+        "from_location": "From",
+        "to_location": "To",
+        "hotel_name": "Hotel",
+        "check_in_date": "Check-in",
+        "check_out_date": "Check-out",
+        "num_nights": "Nights",
+        "room_rate": "Room rate",
+    }
+
+    tbl = Table.grid(padding=(0, 2))
+    tbl.add_column(style="dim", min_width=12)
+    tbl.add_column()
+
+    for key, label in FIELD_LABELS.items():
+        val = result.get(key)
+        if val not in (None, "", []):
+            tbl.add_row(label, str(val))
+
+    provenance = result.get("provenance", {})
+    if provenance.get("ocr_server"):
+        tbl.add_row("OCR server", str(provenance["ocr_server"]))
+
+    con.print(Panel(tbl, title=f"[bold]{filename}[/]", border_style="green", padding=(0, 1)))
 
 
 if __name__ == "__main__":

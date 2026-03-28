@@ -27,7 +27,6 @@ Receipt photo or PDF  →  DocTR OCR  →  Qwen2.5-1.5B LLM  →  Structured JSO
 ## Requirements
 
 - Python 3.10 or later
-- [Conda](https://docs.conda.io/) (recommended) or any Python virtual environment
 - ~4 GB disk space for model weights
 - Apple Silicon (MPS), NVIDIA GPU (CUDA), or CPU — auto-detected at runtime
 
@@ -35,40 +34,48 @@ Receipt photo or PDF  →  DocTR OCR  →  Qwen2.5-1.5B LLM  →  Structured JSO
 
 ## Quick start
 
-### 1. Create a conda environment
+### 1. Install uv (one-time)
 
 ```bash
-conda create -n ocr python=3.11 -y
-conda activate ocr
+curl -LsSf https://astral.sh/uv/install.sh | sh   # macOS / Linux
 ```
 
-### 2. Install the package
-
-From the repo root:
+### 2. Create an environment and install
 
 ```bash
-pip install -e .
+uv venv --python 3.11
+source .venv/bin/activate
+uv pip install -e .
 ```
 
-> **NVIDIA GPU users** — install a CUDA-enabled PyTorch wheel *before* the above step:
+> **Linux without an NVIDIA GPU** — the default PyPI `torch` wheel on Linux includes CUDA libraries
+> (~1.5 GB). Install CPU-only wheels first to avoid this:
 > ```bash
-> pip install torch --index-url https://download.pytorch.org/whl/cu121
+> uv pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+> uv pip install -e .
 > ```
+>
+> **NVIDIA GPU (CUDA)** — install CUDA-enabled wheels instead:
+> ```bash
+> uv pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
+> uv pip install -e .
+> ```
+> `torch` and `torchvision` must always come from the same index.
 
-### 3. Download the models (one-time setup)
+### 3. Initialise (one-time)
 
-This downloads the DocTR OCR models and Qwen2.5-1.5B-Instruct weights (~3.5 GB total) for offline use:
+Downloads both models and creates the data directory (~3.5 GB):
 
 ```bash
-bill-extractor-download
+bill-extractor init
 ```
 
-Run this once. After the first download the app runs fully offline.
+Safe to re-run — already-cached files are skipped automatically.
 
 ### 4. Start the web app
 
 ```bash
-bill-extractor
+bill-extractor serve
 ```
 
 Open your browser at **http://localhost:8080**
@@ -89,29 +96,28 @@ Open your browser at **http://localhost:8080**
 
 ## Command-line interface
 
-Process one or more images directly without the web UI:
+Extract a single file without the web UI:
 
 ```bash
-bill-extractor-cli samples/food_01.jpeg samples/trip_01.jpeg
+bill-extractor extract samples/food_01.jpeg
 ```
 
-Output includes structured JSON and per-image timing:
+When stdout is a terminal, results are shown as a formatted table. When piped, raw JSON is emitted so the command stays scriptable:
 
+```bash
+bill-extractor extract receipt.jpg | jq .total_amount
 ```
-Model loaded in 4.8s
 
---- food_01.jpeg ---
-{
-  "total_amount": "63.00",
-  "currency": "INR",
-  "date": "24/02/2026",
-  "time": "19:55",
-  "category": "food",
-  "meal_type": "dinner"
-}
-  OCR:   1.7s
-  Parse: 6.2s
-  Total: 7.9s
+Save the result to history and `files/` (same as saving from the web UI):
+
+```bash
+bill-extractor extract receipt.jpg --save
+```
+
+Send to a specific remote server:
+
+```bash
+bill-extractor extract receipt.jpg --server http://gpu-box:8080
 ```
 
 ---
@@ -122,14 +128,16 @@ Model loaded in 4.8s
 bill_extractor/
 ├── bill_extractor/          # Python package
 │   ├── __init__.py          # package version
-│   ├── app.py               # Flask web application
+│   ├── app.py               # FastAPI application + CLI entry point
 │   ├── bill_examples.py     # few-shot OCR examples for LLM prompts
 │   ├── bill_parser.py       # LLM-based field extraction
+│   ├── config.py            # Config dataclass + loader
 │   ├── download_models.py   # one-time model download script
-│   ├── main.py              # command-line pipeline
+│   ├── history.py           # server-side history store
 │   ├── ocr_reader.py        # DocTR OCR wrapper
 │   └── templates/
-│       └── index.html       # single-page web UI
+│       └── index.html       # Vue 3 single-page web UI
+├── docs/                    # MkDocs documentation source
 ├── tests/                   # pytest unit and integration tests
 ├── samples/                 # test receipt images and PDFs (git-ignored)
 └── pyproject.toml           # package metadata and dependencies
@@ -141,9 +149,10 @@ bill_extractor/
 
 | Command | Description |
 |---------|-------------|
-| `bill-extractor` | Start the web app on port 8080 |
-| `bill-extractor-download` | Download all models for offline use |
-| `bill-extractor-cli <image>…` | Run the extraction pipeline from the terminal |
+| `bill-extractor init` | Download models and initialise data directory (run once after install) |
+| `bill-extractor serve` | Start the web app on port 8080 |
+| `bill-extractor serve --headless` | OCR endpoint only (no UI, for GPU servers) |
+| `bill-extractor extract <file>` | Extract a single file from the terminal |
 
 ---
 
@@ -151,7 +160,7 @@ bill_extractor/
 
 | Library | Purpose |
 |---------|---------|
-| `flask` | Web framework |
+| `fastapi` + `uvicorn` | Web framework and server |
 | `python-doctr[torch]` | OCR — text detection and recognition |
 | `pypdfium2` | PDF page rendering for DocTR |
 | `torch` | Deep learning runtime (MPS / CUDA / CPU) |

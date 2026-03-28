@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import os
-os.environ["HF_HUB_OFFLINE"] = "1"
 os.environ["TRANSFORMERS_VERBOSITY"] = "error"
 
 import json
@@ -9,6 +8,8 @@ import re
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Sequence, Union
+
+from loguru import logger
 
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
@@ -112,6 +113,8 @@ def _normalize_date(value: Any) -> Optional[str]:
     s = str(value).strip()
     if not s:
         return None
+    # Strip trailing time component (e.g. "23/02/2026 18:58" → "23/02/2026")
+    s = re.sub(r"\s+\d{1,2}:\d{2}(?::\d{2})?$", "", s).strip()
     # Expand 2-digit year: DD/MM/YY → DD/MM/YYYY
     m = re.fullmatch(r"(\d{1,2})/(\d{1,2})/(\d{2})", s)
     if m:
@@ -425,9 +428,10 @@ class BillingInformationExtractor:
     def __init__(self, config: Optional[BillingExtractionConfig] = None) -> None:
         self.config = config or BillingExtractionConfig()
         self.device = _best_device()
-        # float16 is faster on GPU/MPS; float32 on CPU avoids precision issues
-        dtype = torch.float32 if self.device.type == "cpu" else torch.float16
-        print(f"Using device: {self.device} (dtype={dtype})")
+        # float16 halves memory (~3 GB vs ~6 GB for 1.5B); precision is fine
+        # for receipt extraction on all devices including CPU.
+        dtype = torch.float16
+        logger.info("Using device: {} (dtype={})", self.device, dtype)
         self.tokenizer = AutoTokenizer.from_pretrained(self.config.model_name, use_fast=True)
         self.model = AutoModelForCausalLM.from_pretrained(
             self.config.model_name,
@@ -462,8 +466,7 @@ class BillingInformationExtractor:
         text = self.tokenizer.decode(new_tokens, skip_special_tokens=True)
         if not text.strip():
             raise RuntimeError("Model returned empty text.")
-        print(f"DEBUG: Generated text length: {len(text)}")
-        print(f"DEBUG: Generated text:\n{text}")
+        logger.debug("Generated text ({} chars):\n{}", len(text), text)
         return text
 
     def route_category(self, bill_text: BillTextInput) -> str:
@@ -528,6 +531,7 @@ class BillingInformationExtractor:
 
         return {
             "category": "hotel",
+            "date": check_in,
             "name": name,
             "check_in": check_in,
             "check_out": check_out,
@@ -547,20 +551,6 @@ class BillingInformationExtractor:
             return self.extract_hotel(bill_text)
 
         raise RuntimeError(f"Unsupported category after routing: {category}")
-
-
-# =============================================================================
-# Convenience function
-# =============================================================================
-
-def extract_billing_information(
-    bill_text: BillTextInput,
-    model_name: str = "Qwen/Qwen2.5-1.5B-Instruct",
-) -> JsonDict:
-    extractor = BillingInformationExtractor(
-        BillingExtractionConfig(model_name=model_name)
-    )
-    return extractor.extract(bill_text)
 
 
 # =============================================================================
