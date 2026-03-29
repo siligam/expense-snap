@@ -1,7 +1,7 @@
 # Bill Extractor — Architecture & State Snapshot
 
 > Compact reference for onboarding and future development planning.
-> Last updated: 2026-03-25 · Version 0.4.0 · 12 commits
+> Last updated: 2026-03-29 · Version 0.5.0 · 33 commits
 
 ---
 
@@ -57,7 +57,7 @@ Structured JSON result
 
 ```
 bill_extractor/
-├── __init__.py          # version (0.4.0)
+├── __init__.py          # version (0.5.0)
 ├── app.py               # Flask web server + REST API  (352 lines)
 ├── bill_examples.py     # static few-shot examples for LLM prompts  (124 lines)
 ├── bill_parser.py       # prompt builders + BillingInformationExtractor  (582 lines)
