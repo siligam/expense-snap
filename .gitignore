@@ -34,3 +34,7 @@ ARCHITECTURE.md
 # Claude
 .claude/
 site/
+
+# Eval artefacts (local only — contain personal receipt data)
+eval/ground_truth.json
+eval/results_*.json

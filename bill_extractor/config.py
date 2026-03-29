@@ -24,6 +24,8 @@ class Config:
     files_dir: Path = field(default_factory=lambda: DEFAULT_DIR / "files")
     ocr_servers: list = field(default_factory=lambda: [{"url": "local", "enabled": True}])
     port: int = 8080
+    llm_backend: str = "transformers"   # "transformers" | "llamacpp"
+    llm_model_path: str | None = None   # path to GGUF file; required for llamacpp
 
     @property
     def data_dir(self) -> Path:
@@ -99,4 +101,6 @@ def load_config(path: Path | str | None = None) -> Config:
         files_dir=_expand("files_dir", raw, DEFAULT_DIR / "files"),
         ocr_servers=servers,
         port=int(raw.get("port", 8080)),
+        llm_backend=str(raw.get("llm_backend", "transformers")),
+        llm_model_path=raw.get("llm_model_path"),
     )

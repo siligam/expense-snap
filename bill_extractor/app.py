@@ -26,6 +26,7 @@ _log = logging.getLogger(__name__)
 _BASE_DIR = Path(__file__).parent
 
 from .bill_parser import BillingInformationExtractor, BillingExtractionConfig
+from .llm_backend import create_backend
 from .config import Config, load_config
 from .history import HistoryStore
 from .ocr_reader import process as ocr_process
@@ -124,7 +125,15 @@ ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".pdf"}
 
 def _load_models_sync() -> None:
     global _extractor
-    _extractor = BillingInformationExtractor()
+    cfg = _config
+    backend_type = cfg.llm_backend if cfg else "transformers"
+    if backend_type == "llamacpp":
+        kwargs: dict = {"model_path": cfg.llm_model_path}
+    else:
+        kwargs = {"model_name": BillingExtractionConfig().model_name}
+    _extractor = BillingInformationExtractor(
+        backend=create_backend(backend_type, **kwargs)
+    )
 
 
 async def _ensure_models() -> None:

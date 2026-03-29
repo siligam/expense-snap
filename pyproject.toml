@@ -40,6 +40,9 @@ dev = [
     "mkdocs>=1.6",
     "mkdocs-material>=9.5",
 ]
+llamacpp = [
+    "llama-cpp-python>=0.2.80",
+]
 # YAML config support (optional — JSON config works without this)
 yaml = [
     "pyyaml>=6.0",

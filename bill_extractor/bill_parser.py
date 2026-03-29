@@ -424,31 +424,30 @@ def _best_device() -> torch.device:
     return torch.device("cpu")
 
 
-class BillingInformationExtractor:
-    def __init__(self, config: Optional[BillingExtractionConfig] = None) -> None:
-        self.config = config or BillingExtractionConfig()
-        self.device = _best_device()
-        # float16 halves memory (~3 GB vs ~6 GB for 1.5B); precision is fine
-        # for receipt extraction on all devices including CPU.
-        dtype = torch.float16
-        logger.info("Using device: {} (dtype={})", self.device, dtype)
-        self.tokenizer = AutoTokenizer.from_pretrained(self.config.model_name, use_fast=True)
-        self.model = AutoModelForCausalLM.from_pretrained(
-            self.config.model_name,
-            dtype=dtype,
-        ).to(self.device)
+class TransformersBackend:
+    """LLMBackend implementation using HuggingFace transformers."""
+
+    def __init__(
+        self,
+        model_name: str = "Qwen/Qwen2.5-1.5B-Instruct",
+        device: Optional[torch.device] = None,
+        dtype: torch.dtype = torch.float16,
+        do_sample: bool = False,
+    ) -> None:
+        self.device = device or _best_device()
+        self.do_sample = do_sample
+        logger.info("TransformersBackend: {} on {} (dtype={})", model_name, self.device, dtype)
+        self.tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=True)
+        self.model = AutoModelForCausalLM.from_pretrained(model_name, dtype=dtype).to(self.device)
         self.model.eval()
-        # Clear sampling flags from generation_config to suppress warnings when do_sample=False
         for attr in ("temperature", "top_p", "top_k"):
             if hasattr(self.model.generation_config, attr):
                 setattr(self.model.generation_config, attr, None)
 
-    def _generate(self, prompt: str, max_new_tokens: int) -> str:
+    def generate(self, prompt: str, max_new_tokens: int) -> str:
         messages = [{"role": "user", "content": prompt}]
         formatted = self.tokenizer.apply_chat_template(
-            messages,
-            tokenize=False,
-            add_generation_prompt=True,
+            messages, tokenize=False, add_generation_prompt=True,
         )
         inputs = self.tokenizer(formatted, return_tensors="pt")
         inputs = {k: v.to(self.device) for k, v in inputs.items()}
@@ -458,20 +457,38 @@ class BillingInformationExtractor:
             output_ids = self.model.generate(
                 **inputs,
                 max_new_tokens=max_new_tokens,
-                do_sample=self.config.do_sample,
+                do_sample=self.do_sample,
                 pad_token_id=self.tokenizer.eos_token_id,
             )
 
         new_tokens = output_ids[0][input_len:]
         text = self.tokenizer.decode(new_tokens, skip_special_tokens=True)
         if not text.strip():
-            raise RuntimeError("Model returned empty text.")
+            raise RuntimeError("TransformersBackend returned empty text.")
         logger.debug("Generated text ({} chars):\n{}", len(text), text)
         return text
 
+
+class BillingInformationExtractor:
+    def __init__(
+        self,
+        config: Optional[BillingExtractionConfig] = None,
+        backend=None,
+    ) -> None:
+        self.config = config or BillingExtractionConfig()
+        if backend is not None:
+            self._backend = backend
+        else:
+            self._backend = TransformersBackend(
+                model_name=self.config.model_name,
+                device=_best_device(),
+                dtype=torch.float16,
+                do_sample=self.config.do_sample,
+            )
+
     def route_category(self, bill_text: BillTextInput) -> str:
         prompt = build_router_prompt(bill_text)
-        raw = self._generate(prompt, self.config.max_new_tokens_router)
+        raw = self._backend.generate(prompt, self.config.max_new_tokens_router)
         data = _safe_json_loads(raw)
 
         category = str(data.get("category", "")).strip().lower()
@@ -481,7 +498,7 @@ class BillingInformationExtractor:
 
     def extract_food(self, bill_text: BillTextInput) -> JsonDict:
         prompt = build_food_extraction_prompt(bill_text)
-        raw = self._generate(prompt, self.config.max_new_tokens_extract)
+        raw = self._backend.generate(prompt, self.config.max_new_tokens_extract)
         data = _safe_json_loads(raw)
 
         total_amount = _extract_number_string(data.get("total_amount"))
@@ -501,7 +518,7 @@ class BillingInformationExtractor:
 
     def extract_travel(self, bill_text: BillTextInput) -> JsonDict:
         prompt = build_travel_extraction_prompt(bill_text)
-        raw = self._generate(prompt, self.config.max_new_tokens_extract)
+        raw = self._backend.generate(prompt, self.config.max_new_tokens_extract)
         data = _safe_json_loads(raw)
 
         return {
@@ -513,7 +530,7 @@ class BillingInformationExtractor:
 
     def extract_hotel(self, bill_text: BillTextInput) -> JsonDict:
         prompt = build_hotel_extraction_prompt(bill_text)
-        raw = self._generate(prompt, self.config.max_new_tokens_extract)
+        raw = self._backend.generate(prompt, self.config.max_new_tokens_extract)
         data = _safe_json_loads(raw)
 
         name = data.get("name")
