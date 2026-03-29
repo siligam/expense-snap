@@ -45,7 +45,7 @@ Additional fields by category:
 | Category | Extra fields |
 |----------|-------------|
 | food | `total_amount`, `currency`, `meal_type` |
-| travel | `amount`, `from_location`, `to_location` |
+| travel | `amount` |
 | hotel | `name`, `check_in`, `check_out`, `stay_duration_days`, `amount`, `currency` |
 
 **Error responses:**
@@ -77,7 +77,7 @@ Return all history records as a JSON array, newest first.
     "correction": "",
     "action": "good",
     "timestamp": "2026-03-27T10:00:00.000Z",
-    "original_file": "d41d8cd98f00b204e9800998ecf8427e.jpg"
+    "original_file": "27-02-2026_food_dinner.jpg"
   }
 ]
 ```
@@ -111,7 +111,7 @@ Delete a record and its associated original file.
 
 ### `GET /files/{filename}`
 
-Serve a saved original file (e.g. `d41d8...427e.jpg`).
+Serve a saved original file (e.g. `27-02-2026_food_dinner.jpg`).
 
 **Response** `200 OK` with the file bytes, `404` if not found.
 
