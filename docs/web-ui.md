@@ -21,7 +21,7 @@ Each uploaded file gets a card:
 **New result** — extraction succeeded. The card shows:
 - Generated filename (e.g. `27-02-2026_food_dinner.jpg`) with a green **NEW** badge
 - Original filename in italic below if it differs (`from receipt_scan.jpg`)
-- Category pill, extracted fields (date, time, amount, meal type, route, hotel name)
+- Category pill, extracted fields (date, time, amount, meal type, hotel name)
 - **Good** / **Bad** buttons to mark quality
 - Optional correction note — free text saved alongside the result
 - **Download renamed copy** — download the file with the generated name

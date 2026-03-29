@@ -26,15 +26,17 @@ The `dev` extra installs `pytest`, `mkdocs`, and `mkdocs-material`.
 python -m pytest
 ```
 
-Tests live in `tests/`. There are three test modules:
+Tests live in `tests/`. All tests use `tmp_path` fixtures — nothing is written to `~/.bill_extractor` during testing.
 
 | File | What it tests |
 |------|---------------|
 | `test_api.py` | FastAPI endpoints — routing, validation, response schema. Models are mocked; no GPU needed. |
+| `test_bill_parser.py` | LLM extraction logic — field parsing, date/time normalisation, meal type inference. |
 | `test_config.py` | Config loading, defaults, backward-compat migration (`ocr_url` → `ocr_servers`), tilde expansion. |
 | `test_history.py` | `HistoryStore` CRUD, atomic writes, file storage, disk usage. |
-
-All tests use `tmp_path` fixtures — nothing is written to `~/.bill_extractor` during testing.
+| `test_ocr_reader.py` | OCR post-processing — noise filtering, rupee symbol correction, line clustering. |
+| `test_ocr_integration.py` | End-to-end OCR pipeline on real images (requires models; skipped in CI). |
+| `test_frontend.py` | Playwright browser tests — UI interactions against a live server with mocked models. |
 
 ### Test client fixture pattern
 
@@ -61,17 +63,20 @@ bill_extractor/
 ├── history.py           HistoryStore — thread-safe CRUD + atomic writes
 ├── ocr_reader.py        DocTR OCR wrapper (lazy model load)
 └── templates/
-    └── index.html       Vue 3 single-page web UI (~1500 lines)
+    └── index.html       Vue 3 single-page web UI (~1600 lines)
 
 tests/
 ├── test_api.py
+├── test_bill_parser.py
 ├── test_config.py
-└── test_history.py
+├── test_frontend.py
+├── test_history.py
+├── test_ocr_integration.py
+└── test_ocr_reader.py
 
 docs/                    MkDocs source (this site)
 mkdocs.yml               MkDocs configuration
 pyproject.toml           Package metadata and dependencies
-PLAN.md                  Phase-by-phase development plan (local, git-ignored)
 ```
 
 ---
@@ -101,5 +106,5 @@ Commit at natural checkpoints (end of a phase, before a significant refactor). R
 
 1. Add few-shot examples in `bill_extractor/bill_examples.py`
 2. Add a `build_{category}_extraction_prompt` function and `extract_{category}` method in `bill_parser.py`
-3. Add the category to the router prompt in `BillExtractor.route_category`
-4. Update `PLAN.md` and `docs/index.md` with the new fields
+3. Add the category to the router prompt in `BillingInformationExtractor.route_category`
+4. Update `docs/index.md` with the new fields

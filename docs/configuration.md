@@ -10,11 +10,6 @@ On first run, Bill Extractor creates a default config file at:
 
 YAML is also supported — place a `config.yaml` or `config.yml` in the same directory (requires `pip install pyyaml`). If both exist, YAML takes precedence.
 
-You can also pass a specific path at startup:
-```bash
-bill-extractor serve --config /path/to/config.json
-```
-
 ---
 
 ## Fields
@@ -39,7 +34,7 @@ Directory where renamed original receipt files are saved.
 "files_dir": "~/.bill_extractor/files"
 ```
 
-Created automatically on first use. Files are stored as `{md5hash}.{ext}`.
+Created automatically on first use. Files are stored with generated names (e.g. `27-02-2026_food_dinner.jpg`).
 
 ---
 

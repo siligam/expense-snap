@@ -22,7 +22,14 @@
     powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
     ```
 
-### 2. Create an environment and install
+### 2. Clone the repository
+
+```bash
+git clone https://github.com/siligam/expense-snap.git
+cd expense-snap
+```
+
+### 3. Create an environment and install
 
 === "macOS / Linux"
     ```bash
@@ -67,7 +74,7 @@
     pip install -e .
     ```
 
-### 3. Initialise (one-time)
+### 4. Initialise (one-time)
 
 Downloads both models and creates the data directory:
 
@@ -75,7 +82,7 @@ Downloads both models and creates the data directory:
 bill-extractor init
 ```
 
-```
+```bash
 bill-extractor init
 ========================================
 
@@ -99,13 +106,14 @@ Setup complete. Start the app with:
 
 ~3.5 GB total. After this the app runs fully offline. Safe to re-run — already-cached files are skipped automatically.
 
-### 4. Start the app
+### 5. Start the app
 
 ```bash
 bill-extractor serve
 ```
 
-The server starts on **http://localhost:8080** and opens your browser automatically.
+The server starts on **http://localhost:8080** and opens your browser
+automatically.
 
 ---
 
@@ -115,16 +123,21 @@ The server starts on **http://localhost:8080** and opens your browser automatica
 
 ## Running on a GPU server (headless)
 
-If you want to run the extraction service on a remote machine (e.g. a GPU server) and access the UI from a local browser:
+If you want to run the extraction service on a remote machine (e.g. a
+GPU server) and access the UI from a local browser:
 
 **On the GPU server:**
+
 ```bash
 bill-extractor serve --headless --port 8080
 ```
 
-**On the local machine**, point the app at the remote server via Settings → OCR Servers.
+**On the local machine**, point the app at the remote server via
+Settings → OCR Servers.
 
-The headless server exposes only `POST /extract` — no UI, no history routes. File contents are never stored or logged on the remote server; only standard HTTP access logs are written.
+The headless server exposes only `POST /extract` — no UI, no history
+routes. File contents are never stored or logged on the remote server;
+only standard HTTP access logs are written.
 
 ---
 
@@ -137,28 +150,36 @@ bill-extractor extract samples/food_01.jpeg
 ```
 
 Output:
-```
-{
-  "category": "food",
-  "date": "24/02/2026",
-  "time": "19:55",
-  "total_amount": "63.00",
-  "currency": "INR",
-  "meal_type": "dinner"
-}
+
+```bash
+❯ bill-extractor extract samples/food_01.jpeg
+╭──────────────── food_01.jpeg ─────────────────────╮
+│ Category      food                                │
+│ Meal type     dinner                              │
+│ Date          24/02/2026                          │
+│ Time          19:55                               │
+│ Total         63.00                               │
+│ Currency      INR                                 │
+│ OCR server    local                               │
+╰───────────────────────────────────────────────────╯
 ```
 
 Use `--server` to send to a specific extraction server:
+
 ```bash
 bill-extractor extract receipt.jpg --server http://gpu-box:8080
 ```
 
-Add `--save` to persist the result to history and the `files/` folder (equivalent to saving from the web UI):
+Add `--save` to persist the result to history and the `files/` folder
+(equivalent to saving from the web UI):
+
 ```bash
 bill-extractor extract receipt.jpg --save
 ```
 
-When stdout is a terminal, results are displayed as a formatted table. When piped, raw JSON is emitted — so scripting still works:
+When stdout is a terminal, results are displayed as a formatted
+table. When piped, raw JSON is emitted — so scripting still works:
+
 ```bash
 bill-extractor extract receipt.jpg | jq .total_amount
 ```
@@ -169,7 +190,7 @@ bill-extractor extract receipt.jpg | jq .total_amount
 
 All persistent data lives in `~/.bill_extractor/` by default:
 
-```
+```bash
 ~/.bill_extractor/
 ├── config.json          ← configuration (auto-created on first run)
 ├── history.json         ← extraction history database
@@ -177,4 +198,6 @@ All persistent data lives in `~/.bill_extractor/` by default:
 └── bill_extractor.log   ← server log (rotating, 5 MB × 3 files)
 ```
 
-You can change the data directory in [Settings](web-ui.md#settings-tab) — the change takes effect immediately without a server restart.
+You can change the data directory in
+[Settings](web-ui.md#settings-tab) — the change takes effect
+immediately without a server restart.

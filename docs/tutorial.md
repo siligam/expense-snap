@@ -35,7 +35,7 @@ Each file is processed independently. A card appears for each one:
 
 ### Step 3 — Review results
 
-Each result card shows the extracted fields — date, amount, category, meal type (for food), route (for travel), hotel name (for hotel).
+Each result card shows the extracted fields — date, amount, category, meal type (for food), hotel name (for hotel).
 
 **Check the generated filename** at the top of the card, e.g. `27-02-2026_food_dinner.jpg`. This is built from the extracted date, category, and meal type. If any of those fields are wrong, the filename will be wrong too — fix the underlying field.
 
