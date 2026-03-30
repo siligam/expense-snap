@@ -1,0 +1,1699 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Extract structured expense data from receipt photos and PDFs">
+      
+      
+      
+        <link rel="canonical" href="https://siligam.github.io/expense-snap/architecture/">
+      
+      
+        <link rel="prev" href="../api/">
+      
+      
+        <link rel="next" href="../development/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>Architecture - Bill Extractor</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="blue" data-md-color-accent="blue">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#bill-extractor-architecture-state-snapshot" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="Bill Extractor" class="md-header__button md-logo" aria-label="Bill Extractor" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Bill Extractor
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Architecture
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="blue" data-md-color-accent="blue"  aria-hidden="true"  type="radio" name="__palette" id="__palette_0">
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/siligam/expense-snap" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    siligam/expense-snap
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="Bill Extractor" class="md-nav__button md-logo" aria-label="Bill Extractor" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    Bill Extractor
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/siligam/expense-snap" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    siligam/expense-snap
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tutorial/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tutorial
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../web-ui/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Web UI
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    REST API
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#what-it-does" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What it does
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#pipeline" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pipeline
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#deployment-modes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Deployment modes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#repository-layout" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Repository layout
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#key-modules-in-detail" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Key modules in detail
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Key modules in detail">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#ocr_readerpy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ocr_reader.py
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#bill_parserpy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        bill_parser.py
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#apppy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        app.py
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#remote-ocr-server-support" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Remote OCR server support
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#historypy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        history.py
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#configpy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        config.py
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#indexhtml-vue-3-spa" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        index.html (Vue 3 SPA)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#runtime-characteristics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Runtime characteristics
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#dependencies" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Dependencies
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#strengths" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Strengths
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#weaknesses-fragile-areas" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Weaknesses &amp; fragile areas
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Weaknesses &amp; fragile areas">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-regex-based-ocr-correction-most-fragile-part" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Regex-based OCR correction — most fragile part
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-single-static-few-shot-example-per-category" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Single static few-shot example per category
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-amount-extraction-has-no-verification-step" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Amount extraction has no verification step
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-word-clustering-is-layout-unaware" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Word clustering is layout-unaware
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#5-small-model-with-no-fallback" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Small model with no fallback
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#6-meal_type-is-time-based-only" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. meal_type is time-based only
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ideas-to-reduce-fragility-with-ml" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Ideas to reduce fragility with ML
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Ideas to reduce fragility with ML">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#near-term-without-changing-the-core-architecture" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Near-term (without changing the core architecture)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#medium-term-targeted-ml-additions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Medium-term (targeted ML additions)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#longer-term" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Longer-term
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#known-issues-open-gaps" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Known issues / open gaps
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../development/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Development
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#what-it-does" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What it does
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#pipeline" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pipeline
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#deployment-modes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Deployment modes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#repository-layout" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Repository layout
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#key-modules-in-detail" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Key modules in detail
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Key modules in detail">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#ocr_readerpy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ocr_reader.py
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#bill_parserpy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        bill_parser.py
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#apppy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        app.py
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#remote-ocr-server-support" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Remote OCR server support
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#historypy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        history.py
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#configpy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        config.py
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#indexhtml-vue-3-spa" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        index.html (Vue 3 SPA)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#runtime-characteristics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Runtime characteristics
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#dependencies" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Dependencies
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#strengths" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Strengths
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#weaknesses-fragile-areas" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Weaknesses &amp; fragile areas
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Weaknesses &amp; fragile areas">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-regex-based-ocr-correction-most-fragile-part" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Regex-based OCR correction — most fragile part
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-single-static-few-shot-example-per-category" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Single static few-shot example per category
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-amount-extraction-has-no-verification-step" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Amount extraction has no verification step
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-word-clustering-is-layout-unaware" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Word clustering is layout-unaware
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#5-small-model-with-no-fallback" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Small model with no fallback
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#6-meal_type-is-time-based-only" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. meal_type is time-based only
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ideas-to-reduce-fragility-with-ml" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Ideas to reduce fragility with ML
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Ideas to reduce fragility with ML">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#near-term-without-changing-the-core-architecture" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Near-term (without changing the core architecture)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#medium-term-targeted-ml-additions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Medium-term (targeted ML additions)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#longer-term" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Longer-term
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#known-issues-open-gaps" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Known issues / open gaps
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="bill-extractor-architecture-state-snapshot">Bill Extractor — Architecture &amp; State Snapshot<a class="headerlink" href="#bill-extractor-architecture-state-snapshot" title="Permanent link">&para;</a></h1>
+<blockquote>
+<p>Compact reference for onboarding and future development planning.
+Last updated: 2026-03-29 · Version 0.5.0 · 33 commits</p>
+</blockquote>
+<hr />
+<h2 id="what-it-does">What it does<a class="headerlink" href="#what-it-does" title="Permanent link">&para;</a></h2>
+<p>Processes receipt photos (JPEG/PNG/WEBP) and PDFs, extracts structured expense
+data, and persists results through a web UI. Runs fully offline after a one-time
+model download, or can offload OCR/LLM inference to a remote server on the network.</p>
+<p><strong>Extracted fields by category:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Category</th>
+<th>Fields</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Food</td>
+<td>date, time, total_amount, currency, meal_type</td>
+</tr>
+<tr>
+<td>Travel</td>
+<td>date, time, amount</td>
+</tr>
+<tr>
+<td>Hotel</td>
+<td>date (= check_in), name, check_in, check_out, stay_duration_days, amount, currency</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="pipeline">Pipeline<a class="headerlink" href="#pipeline" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>File (image or PDF)
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>  │
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>  ▼
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>DocTR OCR                          ← neural network (db_resnet50 + crnn_vgg16_bn)
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>  │  raw words with geometry
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>  ▼
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>Word clustering (y-axis proximity) ← groups words into reading-order lines
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>  │  list[str] lines
+<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>  ▼
+<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>OCR error correction               ← regex fixes for ₹ misread as &quot;7&quot; or &quot;1 &quot;
+<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>  │
+<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>  ▼
+<a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>Noise filter                       ← strips GSTIN, phone, email, URL, boilerplate
+<a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>  │  cleaned list[str]
+<a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>  ▼
+<a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>Router LLM (Qwen2.5-1.5B)         ← classifies: food / travel / hotel
+<a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a>  │  category
+<a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a>  ▼
+<a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a>Extractor LLM (Qwen2.5-1.5B)      ← extracts fields for that category
+<a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a>  │  raw JSON
+<a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a>  ▼
+<a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a>Post-processing helpers            ← normalize dates, times, amounts
+<a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a>  │
+<a id="__codelineno-0-24" name="__codelineno-0-24" href="#__codelineno-0-24"></a>  ▼
+<a id="__codelineno-0-25" name="__codelineno-0-25" href="#__codelineno-0-25"></a>Structured JSON result + provenance metadata
+</code></pre></div>
+<p>OCR can run locally or be forwarded to a configured remote server. The LLM
+always runs locally (remote LLM is not supported).</p>
+<hr />
+<h2 id="deployment-modes">Deployment modes<a class="headerlink" href="#deployment-modes" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Mode</th>
+<th>Command</th>
+<th>Routes served</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Full stack</strong> (default)</td>
+<td><code>bill-extractor serve</code></td>
+<td>All routes: <code>/extract</code>, <code>/history</code>, <code>/files</code>, <code>/config</code>, <code>/storage</code>, UI</td>
+</tr>
+<tr>
+<td><strong>Headless</strong> (GPU server)</td>
+<td><code>bill-extractor serve --headless</code></td>
+<td><code>/extract</code> only — no UI, no history, no file storage</td>
+</tr>
+<tr>
+<td><strong>CLI</strong></td>
+<td><code>bill-extractor extract &lt;file&gt;</code></td>
+<td>No server — runs extraction and prints result</td>
+</tr>
+</tbody>
+</table>
+<p>In full-stack mode, the browser opens automatically on startup. In headless mode
+the server is intended to be targeted by another full-stack instance as a remote
+OCR server.</p>
+<hr />
+<h2 id="repository-layout">Repository layout<a class="headerlink" href="#repository-layout" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>bill_extractor/
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>├── __init__.py          # package version (0.5.0)
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>├── app.py               # FastAPI application + CLI entry point  (~760 lines)
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>├── bill_examples.py     # static few-shot examples for LLM prompts  (124 lines)
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>├── bill_parser.py       # prompt builders + BillingInformationExtractor  (~582 lines)
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>├── config.py            # Config dataclass + JSON/YAML loader  (~100 lines)
+<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>├── download_models.py   # one-time model download (run via `bill-extractor init`)
+<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>├── history.py           # server-side history store (JSON file + files/ dir)
+<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>├── ocr_reader.py        # DocTR wrapper + post-processing  (~173 lines)
+<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>└── templates/
+<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>    └── index.html       # Vue 3 single-page web UI  (~1614 lines)
+<a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a>
+<a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a>tests/
+<a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a>├── conftest.py              # session-scoped OCR fixtures
+<a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a>├── test_api.py              # 29 API tests — FastAPI routes with mocked ML
+<a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a>├── test_bill_parser.py      # 52 unit tests — pure helpers
+<a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a>├── test_config.py           # 8 unit tests — config loading
+<a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a>├── test_frontend.py         # 2 Playwright browser tests — PDF preview + filename dedup
+<a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a>├── test_history.py          # 12 unit tests — history store
+<a id="__codelineno-1-20" name="__codelineno-1-20" href="#__codelineno-1-20"></a>├── test_ocr_integration.py  # 12 integration tests — real sample images (GPU/CPU)
+<a id="__codelineno-1-21" name="__codelineno-1-21" href="#__codelineno-1-21"></a>└── test_ocr_reader.py       # 40 unit tests — OCR corrections + noise filter
+<a id="__codelineno-1-22" name="__codelineno-1-22" href="#__codelineno-1-22"></a>
+<a id="__codelineno-1-23" name="__codelineno-1-23" href="#__codelineno-1-23"></a>docs/                    # MkDocs source (deployed to GitHub Pages)
+<a id="__codelineno-1-24" name="__codelineno-1-24" href="#__codelineno-1-24"></a>.github/
+<a id="__codelineno-1-25" name="__codelineno-1-25" href="#__codelineno-1-25"></a>├── workflows/
+<a id="__codelineno-1-26" name="__codelineno-1-26" href="#__codelineno-1-26"></a>│   ├── ci.yml           # pytest on push/PR (skips frontend + OCR integration)
+<a id="__codelineno-1-27" name="__codelineno-1-27" href="#__codelineno-1-27"></a>│   └── docs.yml         # mkdocs gh-deploy on push to main
+<a id="__codelineno-1-28" name="__codelineno-1-28" href="#__codelineno-1-28"></a>└── ISSUE_TEMPLATE/      # bug report + feature request templates
+</code></pre></div>
+<p><strong>Test count:</strong> 155 total · CI runs 141 (skips frontend and OCR integration tests).</p>
+<hr />
+<h2 id="key-modules-in-detail">Key modules in detail<a class="headerlink" href="#key-modules-in-detail" title="Permanent link">&para;</a></h2>
+<h3 id="ocr_readerpy"><code>ocr_reader.py</code><a class="headerlink" href="#ocr_readerpy" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>process(file_path)</code> is the single entry point; detects <code>.pdf</code> extension and
+  dispatches to <code>DocumentFile.from_pdf()</code> or <code>from_images()</code>.</li>
+<li><code>_fix_rupee_symbol_misread()</code> has two patterns:</li>
+<li>Pattern 1: <code>(?&lt;![.\d])7(\d{3,}...)</code> — <code>7</code> misread, requires 3+ digits to
+    avoid corrupting small prices like <code>74.00</code>.</li>
+<li>Pattern 2: <code>(:\s*)1\s+(\d{2,}...)</code> — <code>₹</code> misread as <code>1</code> after a label
+    colon (e.g. <code>Total Payable: 1 226.00</code> → <code>₹226.00</code>).</li>
+<li><code>_is_noise()</code> strips ~14 regex patterns: GSTIN, PAN, CIN, phone, email, URL,
+  thank-you phrases.</li>
+<li>DocTR model is loaded lazily on first call to <code>process()</code>, not at import time.</li>
+</ul>
+<h3 id="bill_parserpy"><code>bill_parser.py</code><a class="headerlink" href="#bill_parserpy" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>BillingInformationExtractor</code> loads Qwen2.5-1.5B-Instruct once; auto-selects
+  MPS / CUDA / CPU with float16/float32 accordingly.</li>
+<li>Two-stage inference: <code>route_category()</code> (128 max tokens) then
+  <code>extract_{food|travel|hotel}()</code> (512 max tokens). Both use <code>do_sample=False</code>.</li>
+<li>Post-processing helpers are pure functions (tested independently):</li>
+<li><code>_normalize_date()</code> — handles DD/MM/YYYY, DD/MM/YY, "27 Feb 2026", "27 Feb"</li>
+<li><code>_normalize_time()</code> — converts 12h AM/PM to 24h</li>
+<li><code>_extract_number_string()</code> — extracts first numeric value, strips commas</li>
+<li><code>_infer_meal_type_from_time()</code> — time-window based: breakfast 05:00–10:59,
+    lunch 11:00–15:59, dinner 18:00–23:59; <code>unknown</code> outside these windows</li>
+<li>1 static few-shot example per category in <code>bill_examples.py</code>.</li>
+</ul>
+<h3 id="apppy"><code>app.py</code><a class="headerlink" href="#apppy" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Built on <strong>FastAPI</strong> with uvicorn; replaced Flask in 0.4.x.</li>
+<li>REST API endpoints:</li>
+<li><code>POST /extract</code> — upload file, run OCR + LLM, return structured JSON + provenance</li>
+<li><code>GET /history</code> — all records as JSON array</li>
+<li><code>POST /history</code> — upsert a record (with optional file upload)</li>
+<li><code>DELETE /history/{hash}</code> — delete a record and its stored file</li>
+<li><code>GET /files/{filename}</code> — serve a stored original file</li>
+<li><code>GET /storage</code> — disk usage stats</li>
+<li><code>GET /config</code> — current config (data dir, OCR servers)</li>
+<li><code>PATCH /config</code> — update data dir or OCR server list at runtime</li>
+<li><code>GET /health</code> — liveness check</li>
+<li><code>GET /</code> — serves <code>index.html</code></li>
+<li><strong>Duplicate detection</strong>: MD5 hash of raw file bytes before any processing.</li>
+<li><strong>Files</strong> saved to configured <code>files_dir</code> (default <code>~/.bill_extractor/files/</code>)
+  with generated names: <code>YYYY-MM-DD_category_mealtype.ext</code>, counter-suffixed
+  (<code>_2</code>, <code>_3</code>, …) when fields collide.</li>
+<li><strong>Provenance</strong>: every result includes <code>submitted_at</code>, <code>completed_at</code>,
+  <code>ocr_server</code>, <code>doctr_version</code>, <code>model_name</code>.</li>
+<li><strong>Lazy model loading</strong>: models load on the first <code>/extract</code> request if not
+  already loaded; a semaphore serialises concurrent inference.</li>
+<li><strong>Structured logging</strong>: loguru with colored console output and a rotating file
+  log at <code>{data_dir}/bill_extractor.log</code> (5 MB, 3 files).</li>
+</ul>
+<h3 id="remote-ocr-server-support">Remote OCR server support<a class="headerlink" href="#remote-ocr-server-support" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Full-stack instances can delegate <code>/extract</code> calls to one or more remote
+  headless servers configured via <code>config.json</code> or the <code>/config</code> PATCH endpoint.</li>
+<li>Round-robin across enabled remote servers; falls back to local processing if
+  all remotes are unreachable.</li>
+<li>Config is persisted atomically to <code>{data_dir}/config.json</code>.</li>
+</ul>
+<h3 id="historypy"><code>history.py</code><a class="headerlink" href="#historypy" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Flat JSON file store (<code>history.json</code>) — one record per file processed.</li>
+<li>Each record: <code>hash</code>, <code>filename</code>, <code>filename_generated</code>, <code>result</code>, <code>ocr_text</code>,
+  <code>provenance</code>, <code>correction</code>, <code>action</code>, <code>timestamp</code>, <code>original_file</code>.</li>
+<li><code>action</code> is <code>"good"</code> / <code>"bad"</code> / <code>""</code> (user feedback).</li>
+<li><code>correction</code> is free-text override saved by the user.</li>
+</ul>
+<h3 id="configpy"><code>config.py</code><a class="headerlink" href="#configpy" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Supports JSON and YAML config files (YAML requires <code>pyyaml</code> optional dep).</li>
+<li>Config discovered at <code>~/.bill_extractor/config.json</code> by default.</li>
+<li>Backward-compatible: old <code>ocr_url</code> string field migrated to <code>ocr_servers</code> list.</li>
+</ul>
+<h3 id="indexhtml-vue-3-spa"><code>index.html</code> (Vue 3 SPA)<a class="headerlink" href="#indexhtml-vue-3-spa" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Vue 3 Composition API, loaded via CDN — no build step.</li>
+<li>Drag-and-drop zone accepts JPEG, PNG, WEBP, and PDF.</li>
+<li><strong>Upload tab</strong>: live results per file with thumbnail, extracted fields, OCR
+  text, Good/Bad marking, correction textarea, reprocess button.</li>
+<li><strong>History tab</strong>: all records — sortable columns (date, amount, category),
+  date-range and amount filters, column drag-to-reorder, pagination.</li>
+<li>PDF thumbnails in history rendered via pdf.js hover preview (first page);
+  cached per hash to avoid re-fetching.</li>
+<li>All history lives server-side (JSON + files/). No IndexedDB or FSA usage.</li>
+</ul>
+<hr />
+<h2 id="runtime-characteristics">Runtime characteristics<a class="headerlink" href="#runtime-characteristics" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Metric</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Model load time</td>
+<td>~4–5 s (MPS, float16)</td>
+</tr>
+<tr>
+<td>OCR per image</td>
+<td>~1.5–2 s</td>
+</tr>
+<tr>
+<td>LLM extraction</td>
+<td>~5–8 s (router + extractor)</td>
+</tr>
+<tr>
+<td>Total per receipt</td>
+<td>~7–10 s</td>
+</tr>
+<tr>
+<td>Model footprint</td>
+<td>~3.5 GB disk, ~2 GB RAM (float16)</td>
+</tr>
+<tr>
+<td>Supported devices</td>
+<td>Apple MPS, NVIDIA CUDA, CPU</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="dependencies">Dependencies<a class="headerlink" href="#dependencies" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Package</th>
+<th>Version</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>fastapi</code></td>
+<td>≥0.111.0</td>
+<td>Web framework</td>
+</tr>
+<tr>
+<td><code>uvicorn[standard]</code></td>
+<td>≥0.29.0</td>
+<td>ASGI server</td>
+</tr>
+<tr>
+<td><code>python-multipart</code></td>
+<td>≥0.0.9</td>
+<td>File upload support for FastAPI</td>
+</tr>
+<tr>
+<td><code>httpx</code></td>
+<td>≥0.27.0</td>
+<td>Async HTTP client (remote OCR proxy)</td>
+</tr>
+<tr>
+<td><code>loguru</code></td>
+<td>≥0.7.0</td>
+<td>Structured logging</td>
+</tr>
+<tr>
+<td><code>rich</code></td>
+<td>≥13.0</td>
+<td>CLI output formatting</td>
+</tr>
+<tr>
+<td><code>python-doctr</code></td>
+<td>≥0.9.0</td>
+<td>OCR — detection + recognition</td>
+</tr>
+<tr>
+<td><code>pypdfium2</code></td>
+<td>≥4.0</td>
+<td>PDF page rendering for DocTR</td>
+</tr>
+<tr>
+<td><code>torch</code></td>
+<td>≥2.1.0</td>
+<td>Deep learning runtime</td>
+</tr>
+<tr>
+<td><code>transformers</code></td>
+<td>≥4.40.0</td>
+<td>Qwen2.5-1.5B loading + inference</td>
+</tr>
+<tr>
+<td><code>accelerate</code></td>
+<td>≥0.27.0</td>
+<td>Device placement</td>
+</tr>
+<tr>
+<td><code>Pillow</code></td>
+<td>≥10.0</td>
+<td>Image loading</td>
+</tr>
+<tr>
+<td><code>opencv-python-headless</code></td>
+<td>≥4.8.0</td>
+<td>Image pre-processing</td>
+</tr>
+<tr>
+<td><code>pytest</code></td>
+<td>≥8.0</td>
+<td>Test runner (dev)</td>
+</tr>
+<tr>
+<td><code>pytest-playwright</code></td>
+<td>≥0.5</td>
+<td>Browser tests (dev)</td>
+</tr>
+<tr>
+<td><code>pyyaml</code></td>
+<td>≥6.0</td>
+<td>YAML config support (optional)</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="strengths">Strengths<a class="headerlink" href="#strengths" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Area</th>
+<th>Detail</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Offline-first</strong></td>
+<td>All inference runs locally after <code>bill-extractor init</code>; no API calls at runtime</td>
+</tr>
+<tr>
+<td><strong>Remote offload</strong></td>
+<td>Can delegate OCR/LLM to a headless server on the local network</td>
+</tr>
+<tr>
+<td><strong>Two-stage LLM</strong></td>
+<td>Routing step keeps extractor prompts focused; extensible to new categories</td>
+</tr>
+<tr>
+<td><strong>PDF support</strong></td>
+<td>Native via DocTR + pypdfium2; multi-page PDFs produce combined OCR output</td>
+</tr>
+<tr>
+<td><strong>Duplicate detection</strong></td>
+<td>MD5 on raw bytes; re-upload is instant with zero re-inference</td>
+</tr>
+<tr>
+<td><strong>Provenance tracking</strong></td>
+<td>Every result records which server processed it and model versions</td>
+</tr>
+<tr>
+<td><strong>Manual correction</strong></td>
+<td>Bad results can be corrected in-place and persisted</td>
+</tr>
+<tr>
+<td><strong>Test coverage</strong></td>
+<td>155 tests including regression tests for every bug fixed to date</td>
+</tr>
+<tr>
+<td><strong>Pure helper functions</strong></td>
+<td>Date/time/amount normalisation are pure functions, easy to test and maintain</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="weaknesses-fragile-areas">Weaknesses &amp; fragile areas<a class="headerlink" href="#weaknesses-fragile-areas" title="Permanent link">&para;</a></h2>
+<h3 id="1-regex-based-ocr-correction-most-fragile-part">1. Regex-based OCR correction — most fragile part<a class="headerlink" href="#1-regex-based-ocr-correction-most-fragile-part" title="Permanent link">&para;</a></h3>
+<p>Three iterations in one week show this is the most error-prone area. Each receipt
+printer renders <code>₹</code> slightly differently; OCR misreads it as <code>7</code>, <code>1</code>, <code>?</code>, or
+omits it entirely. Pattern matching cannot reliably distinguish a misread symbol
+from a legitimate number starting with <code>7</code> (e.g., <code>74.00</code> is a valid price).</p>
+<h3 id="2-single-static-few-shot-example-per-category">2. Single static few-shot example per category<a class="headerlink" href="#2-single-static-few-shot-example-per-category" title="Permanent link">&para;</a></h3>
+<p>The LLM has exactly 1 example to learn from per category. When a receipt deviates
+from that template (different label names: <code>NET AMT</code> vs <code>Grand Total</code> vs
+<code>Total Payable</code>), extraction degrades. The prompt rule list is growing reactively.</p>
+<h3 id="3-amount-extraction-has-no-verification-step">3. Amount extraction has no verification step<a class="headerlink" href="#3-amount-extraction-has-no-verification-step" title="Permanent link">&para;</a></h3>
+<p>The LLM output for <code>total_amount</code> is taken at face value. There is no check that
+the returned value actually appears in the OCR text. Hallucinated or misread
+values pass through silently.</p>
+<h3 id="4-word-clustering-is-layout-unaware">4. Word clustering is layout-unaware<a class="headerlink" href="#4-word-clustering-is-layout-unaware" title="Permanent link">&para;</a></h3>
+<p><code>cluster_lines()</code> groups words purely by y-axis proximity. Multi-column receipt
+layouts (item | qty | rate | total) get merged into a single noisy line, which
+confuses the LLM.</p>
+<h3 id="5-small-model-with-no-fallback">5. Small model with no fallback<a class="headerlink" href="#5-small-model-with-no-fallback" title="Permanent link">&para;</a></h3>
+<p>Qwen2.5-1.5B is pushed to its limits on complex hotel invoices. There is no
+retry, no confidence threshold, and no fallback to a larger model or rule-based
+extraction when the LLM returns null fields.</p>
+<h3 id="6-meal_type-is-time-based-only">6. <code>meal_type</code> is time-based only<a class="headerlink" href="#6-meal_type-is-time-based-only" title="Permanent link">&para;</a></h3>
+<p>Content-based signals in the receipt text (e.g., "breakfast combo", "lunch
+thali") are ignored. Times outside the defined windows return <code>unknown</code>.</p>
+<hr />
+<h2 id="ideas-to-reduce-fragility-with-ml">Ideas to reduce fragility with ML<a class="headerlink" href="#ideas-to-reduce-fragility-with-ml" title="Permanent link">&para;</a></h2>
+<h3 id="near-term-without-changing-the-core-architecture">Near-term (without changing the core architecture)<a class="headerlink" href="#near-term-without-changing-the-core-architecture" title="Permanent link">&para;</a></h3>
+<p><strong>A. Post-extraction amount validation</strong>
+After the LLM returns <code>total_amount</code>, scan the cleaned OCR lines for that value.
+If not found verbatim (or within ±0.01), flag the result as low-confidence and
+surface a warning in the UI.</p>
+<p><strong>B. Dynamic few-shot examples</strong>
+Store confirmed Good Result extractions in a small local vector store. At
+inference time, retrieve the 2–3 most similar receipts by OCR text similarity
+and use them as few-shot examples instead of the static ones.</p>
+<p><strong>C. Confidence field in LLM output</strong>
+Add <code>"confidence": "high|medium|low"</code> to the extraction schema. Auto-flag
+low-confidence results for manual review.</p>
+<h3 id="medium-term-targeted-ml-additions">Medium-term (targeted ML additions)<a class="headerlink" href="#medium-term-targeted-ml-additions" title="Permanent link">&para;</a></h3>
+<p><strong>D. Lightweight amount-detector model</strong>
+Replace <code>_fix_rupee_symbol_misread</code> and the LLM's amount-extraction with a small
+sequence-labelling model trained specifically on Indian receipt OCR text.
+~500 labelled receipts would be enough to get high accuracy.</p>
+<p><strong>E. Receipt layout analysis before clustering</strong>
+Use DocTR's bounding-box geometry to detect column structure before clustering.
+Group words by x-band first, then y-proximity within each column.</p>
+<h3 id="longer-term">Longer-term<a class="headerlink" href="#longer-term" title="Permanent link">&para;</a></h3>
+<p><strong>F. Fine-tune Qwen on confirmed extractions</strong>
+Every Good Result or user correction is a supervised training pair. After ~200–300
+confirmed examples, LoRA fine-tuning would likely outperform the current few-shot
+prompting approach on your specific receipt types.</p>
+<hr />
+<h2 id="known-issues-open-gaps">Known issues / open gaps<a class="headerlink" href="#known-issues-open-gaps" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Phone numbers embedded mid-line (e.g., <code>"Ph: 8262818668"</code>) survive the noise
+  filter because the phone regex only matches standalone lines.</li>
+<li>The <code>₹</code> symbol can also be misread as <code>?</code>, <code>*</code>, or <code>R</code> by DocTR on low-res
+  images; no patterns handle these yet.</li>
+<li>Multi-page PDFs: all pages are concatenated into a single OCR pass; if the
+  total appears on page 2, the LLM sees both pages' text which may confuse it.</li>
+<li>No file size validation on <code>/extract</code>.</li>
+<li>Remote LLM inference is not supported; only OCR can be offloaded.</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.sections", "navigation.top", "content.code.copy"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>
