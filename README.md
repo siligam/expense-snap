@@ -2,6 +2,8 @@
 
 Automatically extract structured expense data from receipt photos and PDFs using a two-stage AI pipeline: **DocTR** for OCR and **Qwen2.5-1.5B-Instruct** for structured field extraction. Results are served through a web interface with drag-and-drop upload, session history, filtering, and manual correction support.
 
+**[Documentation](https://siligam.github.io/expense-snap/)**
+
 ---
 
 ## How it works
@@ -28,7 +30,8 @@ Receipt photo or PDF  →  DocTR OCR  →  Qwen2.5-1.5B LLM  →  Structured JSO
 
 - Python 3.10 or later
 - ~4 GB disk space for model weights
-- Apple Silicon (MPS), NVIDIA GPU (CUDA), or CPU — auto-detected at runtime
+- Runs on Windows, macOS, and Linux
+- GPU optional — NVIDIA (CUDA) and Apple Silicon (MPS) are auto-detected; CPU works on any platform
 
 ---
 

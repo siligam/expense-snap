@@ -4,7 +4,8 @@
 
 - Python 3.10 or later
 - ~4 GB disk space for model weights
-- Apple Silicon (MPS), NVIDIA GPU (CUDA), or CPU — auto-detected at runtime
+- Runs on Windows, macOS, and Linux
+- GPU optional — NVIDIA (CUDA) and Apple Silicon (MPS) are auto-detected; CPU works on any platform
 
 ## Installation
 
