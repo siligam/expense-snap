@@ -22,6 +22,7 @@ BillTextInput = Union[str, Sequence[str]]
 from .bill_examples import (
     FOOD_EXAMPLE_LINES, FOOD_EXAMPLE_OUTPUT,
     HOTEL_EXAMPLE_LINES, HOTEL_EXAMPLE_OUTPUT,
+    MISC_EXAMPLE_LINES, MISC_EXAMPLE_OUTPUT,
     TRAVEL_EXAMPLE_LINES, TRAVEL_EXAMPLE_OUTPUT,
 )
 
@@ -209,26 +210,24 @@ Your task is to classify the OCR bill text into exactly one category:
 - "food"
 - "travel"
 - "hotel"
+- "misc"
 
 Definitions:
 - "food": restaurant, cafe, bakery, food court, delivery receipt, meal receipt, in-room dining, room service, IRD food bill, restaurant check — any bill that primarily lists food/drink items with a total amount
 - "travel": taxi, auto ride, cab, Uber, Ola, train, metro, bus, flight, any transport receipt
 - "hotel": hotel stay invoice, resort accommodation invoice, room rent billing — the primary charge is for room accommodation with check-in and check-out dates
+- "misc": POS card payment slip, bank payment receipt, government fee, challan, utility bill, or any payment that does not fit food, travel, or hotel
 
 Critical rules:
 - If the bill lists individual food or drink items (e.g. "Egg Biryani", "Mushroom Biryani") with prices and a food total, classify as "food" — even if the bill comes from a hotel or mentions a room number or guest name.
 - "In Room Dining", "IRD", "Room Service", "Restaurant", "Outlet" on a bill that lists food items → "food"
 - Only classify as "hotel" if the primary charge is for room accommodation/stay (shows Arrival/Departure dates and room rent as the main line item).
+- POS terminal slips showing card swipe details (card number, AID, RRN, AUTH CODE) without food/travel/hotel context → "misc"
 
 Return only valid JSON.
 Do not return markdown.
 Do not return explanations.
 Do not return any text before or after the JSON.
-
-Return exactly this schema:
-{{
-  "category": "food"
-}}
 
 Examples:
 
@@ -249,6 +248,12 @@ Example 3 input:
 
 Example 3 output:
 {json.dumps({"category": "food"}, ensure_ascii=False, indent=2)}
+
+Example 4 input:
+{json.dumps(MISC_EXAMPLE_LINES, ensure_ascii=False, indent=2)}
+
+Example 4 output:
+{json.dumps({"category": "misc"}, ensure_ascii=False, indent=2)}
 
 OCR BILL TEXT:
 {text}
@@ -293,16 +298,6 @@ Example input:
 Example output:
 {json.dumps(FOOD_EXAMPLE_OUTPUT, ensure_ascii=False, indent=2)}
 
-Return exactly this schema:
-{{
-  "total_amount": null,
-  "currency": "INR",
-  "date": null,
-  "time": null,
-  "category": "food",
-  "meal_type": null
-}}
-
 OCR BILL TEXT:
 {text}
 """
@@ -337,14 +332,6 @@ Example input:
 
 Example output:
 {json.dumps(TRAVEL_EXAMPLE_OUTPUT, ensure_ascii=False, indent=2)}
-
-Return exactly this schema:
-{{
-  "category": "travel",
-  "date": null,
-  "time": null,
-  "amount": null
-}}
 
 OCR BILL TEXT:
 {text}
@@ -387,16 +374,42 @@ Example input:
 Example output:
 {json.dumps(HOTEL_EXAMPLE_OUTPUT, ensure_ascii=False, indent=2)}
 
-Return exactly this schema:
-{{
-  "category": "hotel",
-  "name": null,
-  "check_in": null,
-  "check_out": null,
-  "stay_duration_days": null,
-  "amount": null,
-  "currency": "INR"
-}}
+OCR BILL TEXT:
+{text}
+"""
+
+
+def build_misc_extraction_prompt(bill_text: BillTextInput) -> str:
+    text = _join_bill_text(bill_text)
+
+    return f"""You are an information extraction system for miscellaneous payment receipts from India.
+
+Return only valid JSON.
+Do not return markdown.
+Do not return explanations.
+Do not return any text before or after the JSON.
+
+Extract exactly these fields:
+- category
+- amount
+- currency
+- date
+- time
+
+Rules:
+- category must be exactly "misc"
+- amount must be the total transaction or payment amount
+- currency must be "INR"
+- date: format as DD/MM/YYYY with leading zeros (e.g. "2/04/2026" → "02/04/2026")
+- time: extract as HH:MM, dropping seconds if present (e.g. "14:22:26" → "14:22")
+- if a value is missing, return null
+- do not hallucinate
+
+Example input:
+{json.dumps(MISC_EXAMPLE_LINES, ensure_ascii=False, indent=2)}
+
+Example output:
+{json.dumps(MISC_EXAMPLE_OUTPUT, ensure_ascii=False, indent=2)}
 
 OCR BILL TEXT:
 {text}
@@ -475,7 +488,7 @@ class BillingInformationExtractor:
         data = _safe_json_loads(raw)
 
         category = str(data.get("category", "")).strip().lower()
-        if category not in {"food", "travel", "hotel"}:
+        if category not in {"food", "travel", "hotel", "misc"}:
             raise ValueError(f"Invalid routed category: {category}")
         return category
 
@@ -540,6 +553,19 @@ class BillingInformationExtractor:
             "currency": "INR",
         }
 
+    def extract_misc(self, bill_text: BillTextInput) -> JsonDict:
+        prompt = build_misc_extraction_prompt(bill_text)
+        raw = self._generate(prompt, self.config.max_new_tokens_extract)
+        data = _safe_json_loads(raw)
+
+        return {
+            "category": "misc",
+            "date": _normalize_date(data.get("date")),
+            "time": _normalize_time(data.get("time")),
+            "amount": _extract_number_string(data.get("amount")),
+            "currency": "INR",
+        }
+
     def extract(self, bill_text: BillTextInput) -> JsonDict:
         category = self.route_category(bill_text)
 
@@ -549,6 +575,8 @@ class BillingInformationExtractor:
             return self.extract_travel(bill_text)
         if category == "hotel":
             return self.extract_hotel(bill_text)
+        if category == "misc":
+            return self.extract_misc(bill_text)
 
         raise RuntimeError(f"Unsupported category after routing: {category}")
 

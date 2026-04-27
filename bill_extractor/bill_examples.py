@@ -122,3 +122,29 @@ FOOD_EXAMPLE_OUTPUT = {
     "category": "food",
     "meal_type": "dinner",
 }
+
+MISC_EXAMPLE_LINES = [
+    "SBI Payments",
+    "STATION HOUSE OFFICER",
+    "K V RANGAREDDY",
+    "INDIA",
+    "TELANGANA",
+    "Date: 2/04/2026 Time: 14:22:26",
+    "MID: 20600500424032 TID: TS052953",
+    "INVOICE NO: 124865",
+    "SALE",
+    "**** **** **** 0538",
+    "CARD TYPE: VISA CHIP",
+    "AMOUNT 983.00",
+    "PIN VERIFIED OK",
+    "SIGNATURE NOT REQUIRED",
+    "** MERCHANT COPY **",
+]
+
+MISC_EXAMPLE_OUTPUT = {
+    "amount": "983.00",
+    "currency": "INR",
+    "date": "02/04/2026",
+    "time": "14:22",
+    "category": "misc",
+}
